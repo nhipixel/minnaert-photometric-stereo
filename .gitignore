@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# DiLiGenT raw data is large and redistributable only from the original site.
+data/
+*.zip
+
+# Generated outputs are reproducible from experiments/run_all.py.
+results/figures/
+results/results.json
+
+# LaTeX build products, if Overleaf output is ever copied here.
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.synctex.gz
