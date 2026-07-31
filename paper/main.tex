@@ -46,18 +46,18 @@ Photometric stereo recovers a per pixel surface normal from several images of a
 static scene under known, varying illumination, and the standard solver assumes
 the surface is Lambertian. Real surfaces are not. We quantify what that
 assumption costs. Writing the Minnaert reflectance model in its normalized form
-and viewing the surface orthographically, the image stack reduces to a per pixel
-power law applied to Lambertian shading, so the angular error of a Lambertian
-solver becomes a function of a single scalar exponent and the light
-configuration alone, independent of albedo and of surface orientation relative
-to the camera. We derive a first order expression for that error, confirm it
-against a controlled synthetic sweep with two analytically fixed endpoints, and
-evaluate the same solver on a standard benchmark of real objects with ground
-truth normals, reproducing the reference baseline to within
-\diligentAgreeDelta{} degrees on \diligentAgreeCount{} of \diligentObjects{}
-objects. At the simplified Hapke point the Lambertian solver incurs
-\maeHapke{} degrees of mean angular error, comparable to the mid range objects
-of the benchmark.
+and viewing from a fixed viewpoint, the image stack reduces to a per pixel power
+law applied to Lambertian shading. The per pixel factor cancels in the recovered
+direction, so the estimated normal is unaffected by albedo, by source
+irradiance, and by the surface orientation relative to the camera, while the
+estimated albedo carries the full bias. We derive a first order expression for
+the angular error, confirm it against a controlled synthetic sweep with two
+analytically fixed endpoints, and evaluate the same solver on a benchmark of
+real objects with ground truth normals, reproducing the reference baseline to
+within \diligentAgreeDelta{} degrees on \diligentAgreeCount{} of
+\diligentObjects{} objects. At the simplified Hapke point the error reaches
+\rigMin{} to \rigMax{} degrees across the light configurations we test, a range
+that overlaps the mid tier objects of that benchmark.
 \end{abstract}
 
 \section{Introduction: shape from varying illumination}
@@ -87,13 +87,15 @@ single continuous parameter, running an unmodified Lambertian solver on all of
 them, and measuring the resulting angular error against ground truth that is
 exact by construction.
 
-Our contributions are the following. We show that under orthographic viewing the
-Minnaert model collapses to a per pixel power law on Lambertian shading, which
-makes the estimated normal depend on one scalar and leaves the estimated albedo
-carrying a bias that the normal does not. We derive a first order expression for
-the angular error and state the range over which it holds. We validate the
-solver on a benchmark of real objects, matching the reference normal maps
-distributed with it to under $0.001$ degrees per object.
+Our contributions are the following. We show that from a fixed viewpoint the
+Minnaert model collapses to a per pixel power law on Lambertian shading, and
+that the resulting per pixel factor cancels in the recovered direction while
+surviving in full in the recovered albedo. We derive a first order expression
+for the angular error and state the range over which it holds. We validate the
+solver on the DiLiGenT benchmark, matching the reference normal maps
+distributed with it to under \officialAgree{} degrees per object, and we identify a set
+of degenerate ground truth pixels in that benchmark that changes one reported
+figure by \diligentMaxDelta{} degrees depending on how they are scored.
 
 \section{Related work: non Lambertian photometric stereo}
 
@@ -172,7 +174,7 @@ not a special case of Minnaert, and no claim here extends to it.
 
 \subsection{Benchmark and protocol}
 
-We evaluate on a standard photometric stereo benchmark of \diligentObjects{}
+We evaluate on the DiLiGenT photometric stereo benchmark, \diligentObjects{}
 real objects spanning a wide range of reflectance, from a near diffuse ball to
 strongly specular metallic pieces \cite{shi2016}. Each object provides 96
 images at $612\times512$ under calibrated directional lighting, together with a
@@ -211,8 +213,9 @@ reported at the resolution limit of the metric rather than of the solver.
   \IfFileExists{tables/table1_diligent.tex}%
     {\input{tables/table1_diligent}}{\input{table1_diligent}}
   \caption{Mean angular error in degrees on the benchmark, against the
-  reference Lambertian baseline distributed with it. Nine of ten objects agree
-  to within $0.005$ degrees. The exception is discussed in
+  reference Lambertian baseline distributed with it. \diligentAgreeCount{} of
+  \diligentObjects{} objects agree to within \diligentAgreeDelta{} degrees. The
+  exception, \diligentWorstObject{}, is discussed in
   Section~\ref{sec:baseline}.}
   \label{tab:diligent}
 \end{table}
@@ -222,20 +225,31 @@ reported at the resolution limit of the metric rather than of the solver.
 
 Table \ref{tab:diligent} reports the result on all \diligentObjects{} objects.
 The average of \diligentAvg{} degrees agrees with the reference baseline, and
-nine of the ten objects match to within $0.005$ degrees. Beyond the aggregate,
-the estimated normal maps agree with the reference normal maps distributed with
-the benchmark to under $0.001$ degrees per object, which fixes the solver and
-the data handling conventions rather than only their summary statistic.
+\diligentAgreeCount{} of the \diligentObjects{} objects match to within
+\diligentAgreeDelta{} degrees. Beyond the aggregate, the estimated normal maps
+agree with the reference normal maps distributed with the benchmark to under
+\officialAgree{} degrees per object, which fixes the solver and the data
+handling conventions rather than only their summary statistic.
 
 Two details of the protocol are worth recording because they change the reported
 figures. The reference pipeline converts colour to grey with a routine that
-clamps its output to the unit interval; without that clamp, saturated pixels
+clamps its output to the unit interval. Without that clamp, saturated pixels
 inside specular highlights disagree by up to 16 degrees and the ball error reads
-$4.17$ rather than \diligentBall{}. Separately, one object, pot2, is tabulated
-in the literature at $14.65$ degrees, while the baseline normal map distributed
-with the benchmark itself yields $14.46$. Our estimate matches the distributed
-result to $0.0002$ degrees, and we report both values rather than adopting
-either silently.
+$4.17$ rather than \diligentBall{}. The clamp affects only 0.02 percent of
+observations, but those observations concentrate in highlights and lower the
+reported error, so it acts as a mild outlier suppressor inside what is presented
+as an unmodified Lambertian baseline.
+
+The second detail concerns \diligentWorstObject{}, the one object in
+Table~\ref{tab:diligent} that does not agree to within \diligentAgreeDelta{}
+degrees. Its ground truth normal map contains 73 pixels of exactly zero length
+inside the mask, so the true orientation there is undefined. The reference
+metric evaluates $\arccos$ of the dot product and therefore scores those pixels
+at 90 degrees, while a magnitude invariant formulation would score them at
+zero, that is, as perfect matches. The 73 pixels account for the entire
+difference, $73 \times 90 / 35278 = \diligentMaxDelta{}$ degrees. We exclude
+them and report the count, rather than allowing undefined pixels to enter the
+mean under either convention.
 
 % TODO: synthetic sweep, ablations, effective exponent.
 
