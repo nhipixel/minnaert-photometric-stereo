@@ -35,6 +35,42 @@ def sphere_normals(resolution=256, radius_max=0.98):
     return normals, mask
 
 
+def bump_normals(resolution=256, n_bumps=7, amplitude=0.09, sigma=0.16, seed=0):
+    """
+    Smooth height field of summed Gaussians, viewed orthographically.
+
+    A second geometry is needed because every result measured on a sphere is
+    open to the objection that it is a property of that shape. Here the height
+    is z = sum_k A exp(-r_k^2 / 2s^2), so the surface gradients, and therefore
+    the normals, are still available in closed form:
+
+        n proportional to (-dz/dx, -dz/dy, 1)
+
+    Amplitude is kept small so the surface stays a graph with n_z bounded well
+    away from zero, which keeps the Minnaert prefactor finite everywhere.
+
+    Returns normals of shape (resolution, resolution, 3) and an all True mask,
+    since every pixel of a height field is valid.
+    """
+    lin = np.linspace(-1.0, 1.0, resolution)
+    x, y = np.meshgrid(lin, lin)
+
+    rng = np.random.default_rng(seed)
+    centers = rng.uniform(-0.75, 0.75, size=(n_bumps, 2))
+
+    dzdx = np.zeros_like(x)
+    dzdy = np.zeros_like(y)
+    for cx, cy in centers:
+        dx, dy = x - cx, y - cy
+        gauss = amplitude * np.exp(-(dx * dx + dy * dy) / (2.0 * sigma * sigma))
+        dzdx += -dx / (sigma * sigma) * gauss
+        dzdy += -dy / (sigma * sigma) * gauss
+
+    normals = np.stack([-dzdx, -dzdy, np.ones_like(x)], axis=-1)
+    normals /= np.linalg.norm(normals, axis=-1, keepdims=True)
+    return normals, np.ones(x.shape, dtype=bool)
+
+
 def checker_albedo(resolution=256, squares=8, low=0.4, high=0.9):
     """
     Spatially varying albedo field.
