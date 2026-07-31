@@ -71,32 +71,51 @@ def sweep(resolution=RESOLUTION, m=N_LIGHTS, slant=SLANT_DEG, c_values=C_VALUES)
     }
 
 
-def _plot(data, path):
-    fig, ax = plt.subplots(figsize=(6.4, 4.2))
+# A two column page gives each figure about 3.25 inches. Authoring at final
+# print size keeps the type at its intended point size; authoring larger and
+# letting LaTeX shrink it renders the labels at roughly 5pt.
+COLUMN_WIDTH_IN = 3.25
+plt.rcParams.update({
+    "font.size": 8,
+    "axes.labelsize": 8,
+    "axes.titlesize": 8,
+    "xtick.labelsize": 7,
+    "ytick.labelsize": 7,
+    "legend.fontsize": 6.5,
+    "lines.linewidth": 1.3,
+})
 
-    ax.axhline(data["collapse"], color="0.6", ls=":", lw=1.2,
-               label=f"collapse limit at c = 0 ({data['collapse']:.1f} deg)")
-    ax.plot(data["c"], data["predicted"], color="tab:red", ls="--", lw=1.5,
+
+def _plot(data, path):
+    fig, ax = plt.subplots(figsize=(COLUMN_WIDTH_IN, COLUMN_WIDTH_IN * 0.72))
+
+    ax.axhline(data["collapse"], color="0.6", ls=":", lw=1.0,
+               label=f"collapse limit ({data['collapse']:.1f}$^\\circ$)")
+    ax.plot(data["c"], data["predicted"], color="tab:red", ls="--", lw=1.2,
             label="first order prediction")
-    ax.plot(data["c"], data["mean"], color="tab:blue", lw=2.0, label="measured mean")
-    ax.plot(data["c"], data["median"], color="tab:cyan", lw=1.4, label="measured median")
+    ax.plot(data["c"], data["mean"], color="tab:blue", lw=1.7, label="measured mean")
+    ax.plot(data["c"], data["median"], color="tab:cyan", lw=1.1, label="measured median")
 
     # Labels sit low because the legend has to take the upper left.
-    for c, name in [(LAMBERTIAN_C, "Lambertian"), (HAPKE_C, "simplified Hapke")]:
-        ax.axvline(c, color="0.75", lw=0.9, zorder=0)
-        ax.annotate(name, xy=(c, 0.0), xytext=(-4, 6),
-                    textcoords="offset points", rotation=90,
-                    ha="right", va="bottom", fontsize=8, color="0.35",
-                    bbox=dict(facecolor="white", edgecolor="none", pad=1.2, alpha=0.85))
-
-    ax.set_xlabel("Minnaert exponent c")
+    ax.set_xlabel("Minnaert exponent $c$")
     ax.set_ylabel("angular error (degrees)")
     ax.set_xlim(1.0, 0.0)
     ax.set_ylim(bottom=0.0)
-    ax.legend(loc="upper left", fontsize=8, framealpha=0.9)
-    ax.grid(alpha=0.25, lw=0.5)
-    fig.tight_layout()
-    fig.savefig(path, dpi=200)
+
+    # Only the simplified Hapke point is marked. The Lambertian point sits on
+    # the axis boundary, where any label collides with the tick labels, and the
+    # curve starting at zero already makes it evident.
+    top = ax.get_ylim()[1]
+    ax.axvline(HAPKE_C, color="0.75", lw=0.8, zorder=0)
+    ax.annotate("simpl. Hapke", xy=(HAPKE_C, top), xytext=(-3, -3),
+                textcoords="offset points", rotation=90,
+                ha="right", va="top", fontsize=6, color="0.35",
+                bbox=dict(facecolor="white", edgecolor="none", pad=0.8, alpha=0.85))
+
+    ax.legend(loc="lower right", framealpha=0.9, borderpad=0.4, handlelength=1.6)
+    ax.grid(alpha=0.25, lw=0.4)
+    fig.tight_layout(pad=0.3)
+    fig.savefig(path, dpi=400, bbox_inches="tight")
     plt.close(fig)
 
 
