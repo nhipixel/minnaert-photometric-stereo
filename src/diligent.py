@@ -2,13 +2,13 @@
 Loader for the DiLiGenT photometric stereo benchmark.
 
 Ten objects, 96 calibrated directional lights each, 16 bit PNG at 612x512,
-orthographic single view. The orthographic setup matters here: the power law
-reduction used elsewhere in this project assumes it, so the theory applies to
-this data without an extra assumption.
+orthographic single view. What the power law reduction actually needs is a
+single fixed viewpoint, which this satisfies, so the theory applies here
+without an extra assumption.
 
 Expected layout, relative to the repo root:
 
-    data/pmsData/ballPNG/
+    data/DiLiGenT/pmsData/ballPNG/
         001.png ... 096.png
         filenames.txt
         light_directions.txt
@@ -28,12 +28,14 @@ import numpy as np
 # literature, mean angular error in degrees. Used as an external correctness
 # check: these are numbers this project did not produce.
 #
-# One caveat, established by direct comparison. Nine of these reproduce the
-# dataset's own shipped baseline result to within 0.005 degrees. The tenth,
-# pot2, does not: the shipped pot2PNG_Normal_l2.mat yields 14.46 rather than
-# the tabulated 14.65. The shipped artifact is the verifiable one, so it is
-# what the tests assert against, and the report states the difference instead
-# of quietly adopting either number.
+# All ten values are correct and reproduce exactly under the benchmark's own
+# metric. Nine also reproduce here to within 0.005 degrees. The tenth, pot2,
+# reads 14.49 rather than 14.65 for a reason that is a property of the data,
+# not of either implementation: 73 of its 35278 masked pixels carry a zero
+# length ground truth normal, so the true angle there is undefined. The
+# reference scores those as 90 degrees, since arccos of zero is a right angle,
+# while this project excludes them. The 73 pixels account for the entire gap,
+# 73 * 90 / 35278 = 0.186 degrees.
 PUBLISHED_BASELINE = {
     "ball": 4.10,
     "bear": 8.39,
@@ -50,21 +52,15 @@ PUBLISHED_AVERAGE = 15.39
 
 OBJECTS = tuple(PUBLISHED_BASELINE.keys())
 
-# The benchmark's own baseline code collapses colour with rgb2gray, not a plain
-# channel mean. The commented out mean in its L2_PMS.m shows the choice was
-# deliberate, so these BT.601 luma weights are used to stay comparable with the
-# published numbers.
+# The reference pipeline collapses colour with a luma conversion rather than a
+# channel mean, and its own source shows the mean was tried and rejected. These
+# BT.601 weights reproduce it.
 LUMA_BT601 = np.array([0.2989, 0.5870, 0.1140])
 
-# Images are 16 bit and the reference pipeline divides by the full range before
-# anything else. This is a global scale that cannot change a normal direction,
-# but it keeps intensities in a sane range and matches the reference exactly.
+# Images are 16 bit and the reference divides by the full range before anything
+# else. A global scale cannot change a normal direction, but it sets where the
+# unit clamp in load_object falls, so it is not cosmetic.
 BIT_DEPTH_SCALE = float(2**16 - 1)
-
-# Objects whose reflectance is close enough to diffuse that a single Minnaert
-# exponent is expected to describe them. The rest carry strong specular lobes,
-# which are a different model class rather than a smaller exponent.
-DIFFUSE_OBJECTS = ("ball", "cat", "pot1", "bear")
 
 
 @dataclass
@@ -140,7 +136,7 @@ def load_object(name, root=None):
 
     The combined grey value is then clipped at 1. This looks arbitrary but is
     required to reproduce the published baseline: the reference implementation
-    collapses colour with Matlab rgb2gray, which clamps double output to the
+    collapses colour with a luma routine that clamps double output to the
     unit interval. Without the clip, saturated specular pixels disagree with the
     reference by up to 16 degrees and the ball error reads 4.17 instead of 4.10.
     """
@@ -172,8 +168,12 @@ def load_object(name, root=None):
     mask = _read_png(os.path.join(folder, "mask.png"))
     if mask.ndim == 3:
         mask = mask @ LUMA_BT601
-    # The reference code selects mask == 1 exactly, which drops antialiased
-    # edge pixels. Matching that keeps the pixel set identical.
+    if mask.max() <= 0:
+        # Comparing against a maximum of zero would select every pixel and
+        # silently score the whole frame as foreground.
+        raise ValueError(f"mask is empty in {folder}")
+    # The reference code selects the maximum value exactly rather than
+    # thresholding, which keeps the pixel set identical.
     mask = mask >= mask.max()
 
     normals_gt = _load_normals(folder)
@@ -202,7 +202,7 @@ def load_official_l2(name, root=None):
 
 
 def _load_normals(folder):
-    """Ground truth normals ship as a Matlab matrix under the key Normal_gt."""
+    """Ground truth normals ship as a .mat array under the key Normal_gt."""
     from scipy.io import loadmat
 
     mat = loadmat(os.path.join(folder, "Normal_gt.mat"))

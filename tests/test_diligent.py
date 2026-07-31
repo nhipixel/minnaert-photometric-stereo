@@ -44,10 +44,20 @@ def test_object_shapes_are_consistent():
     assert m == 96
 
 
-def test_ground_truth_normals_are_unit_length_inside_the_mask():
-    obj = load_object("ball")
+@pytest.mark.parametrize("name", OBJECTS)
+def test_ground_truth_normals_are_unit_or_degenerate(name):
+    """
+    Ground truth normals are unit length except for a small set that are
+    exactly zero and therefore carry no direction. Testing only one object hid
+    this: nine are clean and pot2 is not. The degenerate pixels are counted
+    here so their number is a checked fact rather than an assumption.
+    """
+    obj = load_object(name)
     lengths = np.linalg.norm(obj.normals_gt[obj.mask], axis=-1)
-    assert np.abs(lengths - 1.0).max() < 1e-3
+    degenerate = lengths < 1e-9
+    assert np.abs(lengths[~degenerate] - 1.0).max() < 1e-3
+    expected = 73 if name == "pot2" else 0
+    assert int(degenerate.sum()) == expected, int(degenerate.sum())
 
 
 def test_light_directions_are_unit_length():
@@ -62,7 +72,7 @@ def test_matches_the_shipped_official_baseline_normals(name):
     dataset's own precomputed baseline pixel by pixel, not just in aggregate.
 
     Reproducing this required clipping the grey conversion at 1, since the
-    reference uses Matlab rgb2gray, which clamps double output. Without that,
+    reference clamps its luma output to the unit interval. Without that,
     saturated specular pixels disagree by up to 16 degrees.
     """
     obj = load_object(name)
@@ -75,14 +85,35 @@ def test_matches_the_shipped_official_baseline_normals(name):
 @pytest.mark.parametrize("name", OBJECTS)
 def test_matches_the_tabulated_literature_baseline(name):
     """
-    Weaker aggregate check against the commonly tabulated numbers.
+    Aggregate check against the commonly tabulated numbers.
 
-    pot2 gets a wider tolerance. Its shipped baseline artifact yields 14.46
-    while the literature tabulates 14.65, and the estimate here matches the
-    artifact to 0.0002 degrees. The discrepancy is in the table, not the solver.
+    pot2 gets a wider tolerance for a documented reason. Its 73 degenerate
+    ground truth pixels are scored as 90 degrees by the reference metric and
+    excluded here, which accounts for the whole difference. The tabulated value
+    is correct; the two conventions simply disagree on undefined pixels.
     """
     tolerance = 0.25 if name == "pot2" else 0.02
     assert abs(_mae(name) - PUBLISHED_BASELINE[name]) < tolerance
+
+
+def test_degenerate_pixels_explain_the_pot2_difference():
+    """
+    Scoring the 73 undefined pixels as 90 degrees, which is what arccos of a
+    zero dot product returns, should recover the tabulated value exactly. This
+    pins the cause rather than leaving it as an unexplained tolerance.
+    """
+    obj = load_object("pot2")
+    est, _ = woodham_lstsq(obj.images, obj.lights, obj.mask)
+    err = angular_error_deg(est, obj.normals_gt, obj.mask)
+
+    scored = np.isfinite(err) & obj.mask
+    n_degenerate = int(obj.mask.sum() - scored.sum())
+    assert n_degenerate == 73
+
+    with_reference_convention = (
+        np.nansum(err[scored]) + n_degenerate * 90.0
+    ) / int(obj.mask.sum())
+    assert abs(with_reference_convention - PUBLISHED_BASELINE["pot2"]) < 0.01
 
 
 def test_average_matches_the_published_average():
