@@ -47,8 +47,3 @@ def checker_albedo(resolution=256, squares=8, low=0.4, high=0.9):
     cell = resolution // squares
     checker = ((gx // cell) + (gy // cell)) % 2
     return np.where(checker == 0, low, high).astype(np.float64)
-
-
-def flatten_masked(field, mask):
-    """Collapse a (H, W, ...) field to (N, ...) keeping only masked pixels."""
-    return field[mask]
