@@ -1,9 +1,9 @@
 """
-Stage 3. Woodham least squares on the DiLiGenT benchmark.
+Woodham least squares on the DiLiGenT benchmark.
 
-This satisfies the Dataset and Evaluation requirements: real objects with
-ground truth normals, scored by mean angular error in degrees. The solver is
-the same one used on synthetic data, with no changes for real input.
+Real objects with ground truth normals, scored by mean angular error in
+degrees. The solver is the same one used on synthetic data, with no changes for
+real input.
 
 Every number is checked against the published baseline, which this project did
 not produce, so a convention error cannot pass silently.
@@ -15,7 +15,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 import numpy as np
 
-from diligent import OBJECTS, PUBLISHED_AVERAGE, PUBLISHED_BASELINE, is_available, load_object
+from diligent import (
+    OBJECTS,
+    PUBLISHED_AVERAGE,
+    PUBLISHED_BASELINE,
+    is_available,
+    load_object,
+    load_official_l2,
+)
 from metrics import angular_error_deg, summarize
 from results_io import save_section
 from solver import woodham_lstsq
@@ -33,13 +40,24 @@ def run():
         est, _ = woodham_lstsq(obj.images, obj.lights, obj.mask)
         stats = summarize(angular_error_deg(est, obj.normals_gt, obj.mask), obj.mask)
 
+        # Agreement with the shipped reference estimate, which is a stronger
+        # check than matching its mean, and the count of pixels whose ground
+        # truth carries no direction and so cannot be scored.
+        official = summarize(
+            angular_error_deg(est, load_official_l2(name), obj.mask), obj.mask
+        )["mean_deg"]
+        n_scored = stats["n_pixels"]
+        n_masked = int(obj.mask.sum())
+
         published = PUBLISHED_BASELINE[name]
         rows[name] = {
             "mae_deg": stats["mean_deg"],
             "median_deg": stats["median_deg"],
             "published_mae_deg": published,
             "delta_deg": stats["mean_deg"] - published,
-            "n_pixels": stats["n_pixels"],
+            "n_pixels": n_scored,
+            "n_degenerate_gt_pixels": n_masked - n_scored,
+            "agreement_with_official_deg": official,
             "n_lights": int(obj.lights.shape[0]),
         }
         print(f"{name:<10}{stats['mean_deg']:>9.3f}{published:>12.2f}"
@@ -53,10 +71,17 @@ def run():
         "average_mae_deg": ours,
         "published_average_mae_deg": PUBLISHED_AVERAGE,
         "max_abs_delta_deg": float(max(abs(r["delta_deg"]) for r in rows.values())),
+        "max_agreement_with_official_deg": float(
+            max(r["agreement_with_official_deg"] for r in rows.values())
+        ),
+        "total_degenerate_gt_pixels": int(
+            sum(r["n_degenerate_gt_pixels"] for r in rows.values())
+        ),
         "note": (
-            "Grey conversion clips at 1 to match the reference implementation, "
-            "which uses Matlab rgb2gray. Without the clip, saturated specular "
-            "pixels disagree and ball reads 4.17 instead of 4.10."
+            "Grey conversion clips at 1 to match the reference implementation. "
+            "Without the clip, saturated specular pixels disagree and ball "
+            "reads 4.17 instead of 4.10. Degenerate ground truth pixels are "
+            "excluded from the mean, since their true orientation is undefined."
         ),
     }
     save_section("diligent_baseline", payload)
