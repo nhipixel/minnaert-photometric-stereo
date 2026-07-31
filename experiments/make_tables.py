@@ -79,7 +79,27 @@ def macros(results):
         "diligentAgreeCount": str(len(rest)),
         "diligentAgreeDelta": f"{rest[-1]:.3f}",
         "diligentWorstObject": worst,
+        "officialAgree": f"{d['max_agreement_with_official_deg']:.4f}",
+        "degeneratePixels": str(d["total_degenerate_gt_pixels"]),
     }
+    a = results.get("ablations", {})
+    if a:
+        rig = a["rig_dependence"]
+        geo = a["second_geometry"]
+        defs.update({
+            "condCorr": f"{a['conditioning']['log_log_correlation']:.3f}",
+            "condMax": f"{max(a['conditioning']['cond_L']):.0f}",
+            "condErrMax": f"{max(a['conditioning']['mae_deg']):.1f}",
+            "lightExponent": f"{a['light_count']['fitted_exponent']:.2f}",
+            "noiseExponent": f"{a['noise']['fitted_exponent_small_noise']:.2f}",
+            "rigMin": f"{rig['min_deg']:.1f}",
+            "rigMax": f"{rig['max_deg']:.1f}",
+            "rigCount": str(rig["n_rigs"]),
+            "bumpHapke": f"{geo['mae_deg'][2]:.1f}",
+            "bumpTilt": f"{geo['tilt']['median_deg']:.0f}",
+            "sphereTilt": f"{geo['sphere_tilt']['median_deg']:.0f}",
+        })
+
     if s:
         defs.update({
             "sweepLights": str(s["n_lights"]),
