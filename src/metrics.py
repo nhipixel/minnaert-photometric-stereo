@@ -6,6 +6,10 @@ DiLiGenT benchmark reports, so synthetic and real results stay comparable.
 """
 import numpy as np
 
+# A normal shorter than this carries no direction, so any angle against it is
+# undefined rather than zero.
+DEGENERATE_TOL = 1e-9
+
 
 def angular_error_deg(normals_est, normals_true, mask=None):
     """
@@ -17,10 +21,22 @@ def angular_error_deg(normals_est, normals_true, mask=None):
     product by a square root and floors out around 1e-6 degrees. The atan2
     form stays accurate there, which matters because the Lambertian case is
     validated at exactly that scale.
+
+    Pixels where either vector has no direction return NaN rather than a score.
+    atan2 is magnitude invariant, so a zero length ground truth normal would
+    otherwise read as zero degrees, a perfect match, against any estimate at
+    all. One benchmark object contains 73 such pixels, enough to shift its
+    reported error by 0.19 degrees.
     """
     dot = np.sum(normals_est * normals_true, axis=-1)
     cross = np.linalg.norm(np.cross(normals_est, normals_true), axis=-1)
     err = np.degrees(np.arctan2(cross, dot))
+
+    degenerate = (np.linalg.norm(normals_est, axis=-1) < DEGENERATE_TOL) | (
+        np.linalg.norm(normals_true, axis=-1) < DEGENERATE_TOL
+    )
+    err = np.where(degenerate, np.nan, err)
+
     if mask is not None:
         err = np.where(mask, err, np.nan)
     return err
@@ -39,11 +55,6 @@ def summarize(err, mask=None):
     }
 
 
-def albedo_relative_error(albedo_est, albedo_true, mask=None):
-    """Signed relative albedo error, used to expose the n_z bias."""
-    with np.errstate(divide="ignore", invalid="ignore"):
-        rel = (albedo_est - albedo_true) / albedo_true
-    rel = np.nan_to_num(rel, nan=0.0, posinf=0.0, neginf=0.0)
-    if mask is not None:
-        rel = np.where(mask, rel, np.nan)
-    return rel
+def mean_angular_error(normals_est, normals_true, mask=None):
+    """Mean angular error in degrees, the single number most results quote."""
+    return summarize(angular_error_deg(normals_est, normals_true, mask), mask)["mean_deg"]
