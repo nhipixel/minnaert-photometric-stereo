@@ -10,8 +10,12 @@ with c = 1 giving Lambertian and c = 0.5 giving the simplified Hapke model.
 
 Two independent implementations of the same Minnaert radiance are provided.
 render_minnaert evaluates the BRDF and the foreshortening term separately,
-while render_minnaert_powerlaw uses the reduction derived in the report. They
-must agree, and that agreement is the numerical proof of the reduction.
+while render_minnaert_powerlaw uses the reduction derived in the report.
+
+Their agreement checks the algebraic rearrangement only. Both fix the view
+direction, so neither exercises the substantive step, which is that cos_r does
+not depend on the light index. That step is what the fixed viewpoint buys, and
+it is checked by the symbolic test instead.
 """
 import numpy as np
 
