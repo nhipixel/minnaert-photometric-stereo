@@ -1,9 +1,9 @@
 """
 Woodham photometric stereo solver.
 
-Szeliski equation 13.5 gives, for non shadowed pixels of a diffuse surface,
+For non shadowed pixels of a diffuse surface,
 
-    I_k = rho (n dot v_k)
+    I_k = rho (n dot s_k)
 
 which is linear in g = rho n. Stacking the m light directions into L gives
 I = L g, solved by linear least squares. The albedo is the length of g and the
@@ -51,6 +51,11 @@ def woodham_shadow_aware(images, lights, mask=None, threshold=0.0):
     linear model. Falls back to all lights when fewer than three survive.
     """
     h, w, m = images.shape
+    if lights.shape[0] != m:
+        # Without this the per pixel light subsets still index legally and the
+        # solve returns a plausible but wrong answer instead of failing.
+        raise ValueError(f"images have {m} lights but L has {lights.shape[0]} rows")
+
     flat = images.reshape(-1, m)
     g = np.zeros((flat.shape[0], 3))
 
