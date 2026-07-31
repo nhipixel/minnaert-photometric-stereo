@@ -201,11 +201,6 @@ def load_official_l2(name, root=None):
     return np.asarray(arrays[0], dtype=np.float64)
 
 
-def official_l2_available(root=None):
-    root = root or default_root()
-    return os.path.isdir(os.path.join(os.path.dirname(root), "estNormalNonLambert"))
-
-
 def _load_normals(folder):
     """Ground truth normals ship as a Matlab matrix under the key Normal_gt."""
     from scipy.io import loadmat
