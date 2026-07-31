@@ -36,23 +36,42 @@ RES = 128
 C_VALUES = [0.0, 0.25, 0.5, 0.75, 1.0]
 
 
-def _setup(m=10, c=0.5, k=1.0, E0=1.0):
+def _setup(m=10):
     normals, mask = sphere_normals(RES)
     lights = cone_rig(m)
     lit = fully_lit_mask(normals, lights, mask)
     return normals, mask, lights, lit
 
 
-def test_symbolic_reduction():
-    """The BRDF times foreshortening equals the separated cosine powers."""
+def test_symbolic_reduction_matches_the_renderer():
+    """
+    The symbolic radiance and the implemented renderer must agree.
+
+    Comparing two symbolic expressions to each other would only exercise sympy.
+    The symbolic form is lambdified and evaluated against render_minnaert so
+    the identity is tied to the code that actually produces the images.
+    """
     c, k, E0 = sp.symbols("c k E0", positive=True)
     ci, cr = sp.symbols("cos_i cos_r", positive=True)
 
     f_r = (c + 1) / (2 * sp.pi) * k * (ci * cr) ** (c - 1)
-    radiance = f_r * E0 * ci
-    expected = (c + 1) / (2 * sp.pi) * k * E0 * ci**c * cr ** (c - 1)
+    radiance = sp.simplify(f_r * E0 * ci)
+    assert sp.simplify(radiance - (c + 1) / (2 * sp.pi) * k * E0 * ci**c * cr ** (c - 1)) == 0
 
-    assert sp.simplify(radiance - expected) == 0
+    f = sp.lambdify((ci, cr, c, k, E0), radiance, "numpy")
+
+    normals, mask, lights, lit = _setup()
+    cos_i = np.clip(normals @ lights.T, 0.0, None)
+    cos_r = np.clip(normals[..., 2], 0.0, None)[..., None]
+    for c_val in [0.25, 0.5, 0.75, 1.0]:
+        # Shadowed pixels have cos_i of zero, where the symbolic form divides
+        # by zero for c below one. The renderer clamps them, so they are
+        # excluded here rather than compared.
+        with np.errstate(divide="ignore", invalid="ignore"):
+            symbolic = f(cos_i, np.broadcast_to(cos_r, cos_i.shape), c_val, 1.0, 1.0)
+        rendered = render_minnaert(normals, lights, c_val)
+        scale = np.abs(rendered[lit]).max()
+        assert np.abs(symbolic - rendered)[lit].max() / scale < 1e-12
 
 
 @pytest.mark.parametrize("c", C_VALUES)
