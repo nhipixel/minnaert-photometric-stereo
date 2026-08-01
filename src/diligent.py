@@ -182,23 +182,66 @@ def load_object(name, root=None):
     return DiLiGenTObject(name, images, lights, mask, normals_gt)
 
 
-def load_official_l2(name, root=None):
-    """
-    The dataset's own precomputed Woodham baseline normal map.
+# Normal maps distributed with the benchmark for eight published calibrated
+# methods plus the least squares baseline, keyed by the tag in each file name.
+PUBLISHED_METHODS = (
+    "l2",
+    "ICCV05Goldman",
+    "CVPR08Alldrin",
+    "ACCV10Wu",
+    "CVPR10Higo",
+    "ECCV12Shi",
+    "CVPR12Shi",
+    "CVPR12Ikehata",
+    "CVPR14Ikehata",
+)
 
-    Shipped in estNormalNonLambert alongside results from published methods.
-    Comparing against this is stronger than matching a tabulated mean, because
-    it checks the estimate pixel by pixel rather than in aggregate.
+
+def load_published_estimate(name, method="l2", root=None):
+    """
+    A precomputed normal map distributed with the benchmark.
+
+    Comparing against these is stronger than matching a tabulated mean, since
+    it checks estimates pixel by pixel, and it lets a decade of published
+    methods be evaluated under one consistent metric.
     """
     from scipy.io import loadmat
 
     root = root or default_root()
     folder = os.path.join(os.path.dirname(root), "estNormalNonLambert")
-    mat = loadmat(os.path.join(folder, f"{name}PNG_Normal_l2.mat"))
+    mat = loadmat(os.path.join(folder, f"{name}PNG_Normal_{method}.mat"))
     arrays = [v for k, v in mat.items() if not k.startswith("__") and np.ndim(v) == 3]
     if len(arrays) != 1:
-        raise KeyError(f"expected one normal array for {name}, got keys {list(mat)}")
+        raise KeyError(f"expected one normal array for {name} {method}, got keys {list(mat)}")
     return np.asarray(arrays[0], dtype=np.float64)
+
+
+def load_official_l2(name, root=None):
+    """The baseline map, kept as its own name since gates lean on it."""
+    return load_published_estimate(name, "l2", root)
+
+
+def load_ground_truth(name, root=None):
+    """
+    Ground truth normals and mask only, without decoding the 96 images.
+
+    Evaluating published estimate maps needs just these, and skipping the
+    image stack turns a four second load into a fraction of one.
+    """
+    root = root or default_root()
+    folder = os.path.join(root, f"{name}PNG")
+    if not os.path.isdir(folder):
+        raise FileNotFoundError(f"object folder not found: {folder}")
+
+    mask = _read_png(os.path.join(folder, "mask.png"))
+    if mask.ndim == 3:
+        mask = mask @ LUMA_BT601
+    if mask.max() <= 0:
+        raise ValueError(f"mask is empty in {folder}")
+    mask = mask >= mask.max()
+
+    normals_gt = np.where(mask[..., None], _load_normals(folder), 0.0)
+    return normals_gt, mask
 
 
 def _load_normals(folder):
