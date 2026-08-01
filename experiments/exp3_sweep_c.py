@@ -119,6 +119,84 @@ def _plot(data, path):
     plt.close(fig)
 
 
+def make_teaser(path, resolution=256, m=N_LIGHTS, slant=SLANT_DEG):
+    """
+    One rendered view, the recovered normal map, and the error map, at five
+    exponents. The visual companion to the sweep curve.
+    """
+    normals, mask = sphere_normals(resolution)
+    lights = cone_rig(m, slant)
+    cs = [1.0, 0.75, 0.5, 0.25, 0.0]
+
+    fig, axes = plt.subplots(3, len(cs), figsize=(6.6, 3.9))
+    last = None
+    for col, c in enumerate(cs):
+        images = render_minnaert(normals, lights, float(c))
+        est, _ = woodham_lstsq(images, lights, mask)
+        err = angular_error_deg(est, normals, mask)
+
+        shown = images[..., 0]
+        shown = shown / max(shown.max(), 1e-12)
+        axes[0, col].imshow(np.where(mask, shown, np.nan), cmap="gray", vmin=0, vmax=1)
+
+        rgb = np.ones(normals.shape)
+        rgb[mask] = (est[mask] + 1.0) / 2.0
+        axes[1, col].imshow(np.clip(rgb, 0, 1))
+
+        last = axes[2, col].imshow(np.where(mask, err, np.nan),
+                                   cmap="viridis", vmin=0, vmax=40)
+        axes[0, col].set_title(f"$c = {c:.2f}$", fontsize=8)
+
+    for row, label in enumerate(["rendering", "recovered $\\hat{n}$", "error (deg)"]):
+        axes[row, 0].set_ylabel(label, fontsize=7)
+    for ax in axes.ravel():
+        ax.set_xticks([])
+        ax.set_yticks([])
+    fig.colorbar(last, ax=axes[2, :], fraction=0.02, pad=0.01)
+    fig.savefig(path, dpi=400, bbox_inches="tight")
+    plt.close(fig)
+
+
+def albedo_bias(path, resolution=256, m=N_LIGHTS, slant=SLANT_DEG):
+    """
+    The other half of the invariance claim. The per pixel factor that cancels
+    in the direction survives in the albedo, so the recovered albedo follows
+    n_z^(c-1) while the normals stay exact. Slopes are computed on the isolated
+    factor, where the relation is exact, and the figure shows the raw cloud.
+    """
+    normals, mask = sphere_normals(resolution)
+    lights = cone_rig(m, slant)
+    lit = fully_lit_mask(normals, lights, mask)
+    nz = normals[..., 2][lit]
+
+    fig, ax = plt.subplots(figsize=(3.25, 2.3))
+    slopes = {}
+    for c, color in [(1.0, "tab:blue"), (0.5, "tab:red")]:
+        images = render_minnaert(normals, lights, c)
+        _, rho = woodham_lstsq(images, lights, mask)
+
+        w = np.clip(normals @ lights.T, 0.0, None) ** c
+        h = np.linalg.norm(w @ np.linalg.pinv(lights).T, axis=-1)
+        isolated = rho[lit] / h[lit]
+        slope = float(np.polyfit(np.log(nz), np.log(isolated), 1)[0])
+        slopes[f"c{c}"] = slope
+
+        sub = slice(None, None, 37)
+        ax.plot(nz[sub], rho[lit][sub], ".", ms=1.5, color=color, alpha=0.5,
+                label=f"$c = {c:.1f}$ (slope {slope:+.2f})")
+
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel("$n_z$")
+    ax.set_ylabel("recovered albedo")
+    ax.legend(framealpha=0.9, markerscale=6)
+    ax.grid(alpha=0.25, lw=0.4)
+    fig.tight_layout(pad=0.3)
+    fig.savefig(path, dpi=400, bbox_inches="tight")
+    plt.close(fig)
+    return slopes
+
+
 def run():
     data = sweep()
 
@@ -148,8 +226,18 @@ def run():
         },
     }
 
+    # Prediction quality at the two marked points, quoted in the report so the
+    # validity range of the first order law is stated with numbers.
+    for target, key in [(HAPKE_C, "hapke"), (0.0, "zero")]:
+        i = int(np.argmin(np.abs(data["c"] - target)))
+        payload[f"measured_over_predicted_at_{key}"] = float(
+            data["mean"][i] / data["predicted"][i]
+        )
+
     path = figure_path("fig2_minnaert_sweep.png")
     _plot(data, path)
+    make_teaser(figure_path("fig1_teaser.png"))
+    payload["albedo_slopes"] = albedo_bias(figure_path("fig3_albedo_bias.png"))
     save_section("minnaert_sweep", payload)
 
     print(f"fully lit pixels : {data['n_pixels']}")
