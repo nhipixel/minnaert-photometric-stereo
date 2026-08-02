@@ -16,6 +16,8 @@ sys.path.insert(0, HERE)
 import exp2_diligent
 import exp3_sweep_c
 import exp4_ablations
+import exp5_landscape
+import exp6_exponent
 import make_tables
 from diligent import is_available
 from results_io import RESULTS_PATH
@@ -26,6 +28,8 @@ def main():
         ("DiLiGenT baseline", exp2_diligent.run, True),
         ("Minnaert exponent sweep", exp3_sweep_c.run, False),
         ("Ablations", exp4_ablations.run, False),
+        ("Published method landscape", exp5_landscape.run, True),
+        ("Effective exponent and correction", exp6_exponent.run, True),
     ]
 
     for title, fn, needs_data in steps:
