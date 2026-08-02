@@ -66,7 +66,7 @@ https://sites.google.com/site/photometricstereodata/single and extract it so tha
 folders sit under `data/DiLiGenT/pmsData/`, for example `data/DiLiGenT/pmsData/ballPNG/`.
 A flattened `data/pmsData/` is also accepted.
 
-Each object folder holds 96 sixteen bit PNG images, `light_directions.txt`,
+Each object folder holds 96 16-bit PNG images, `light_directions.txt`,
 `light_intensities.txt`, `filenames.txt`, `mask.png` and a ground truth normal map. The benchmark
 uses an orthographic, single view setup, which is the same assumption the derivation in the report
 makes.
