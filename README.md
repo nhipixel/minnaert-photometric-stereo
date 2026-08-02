@@ -33,7 +33,8 @@ shadowing and porosity and is not.
 | `experiments/` | One script per experiment, all driven by `run_all.py` |
 | `tests/` | Every quality gate, encoded as assertions |
 | `results/` | Generated figures and `results.json` |
-| `paper/` | CVPR format report, mirrored to Overleaf |
+| `paper/` | CVPR format report, with generated tables and figure copies |
+| `presentation/` | Timed script for the ten minute video |
 
 ## Running
 
