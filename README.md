@@ -2,7 +2,7 @@
 
 Research code for a controlled study of how the Lambertian assumption fails in photometric stereo.
 
-## What this is
+## Project Overview
 
 Photometric stereo recovers a per pixel surface normal from several images of a static scene taken
 under known, varying illumination. The standard solver assumes the surface is Lambertian. Real
