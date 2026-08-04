@@ -35,7 +35,7 @@ from brdf import render_minnaert
 from diligent import OBJECTS, is_available, load_object
 from exponent import apply_exponent_correction, fit_exponent_map
 from geometry import sphere_normals
-from metrics import mean_angular_error
+from metrics import angular_error_deg, mean_angular_error
 from results_io import figure_path, save_section
 from solver import woodham_lstsq, woodham_trimmed
 from theory import fully_lit_mask
@@ -96,15 +96,87 @@ def study_object(obj):
     }
 
 
+SHOWCASE = ("ball", "cat", "harvest")
+
+
+def _bbox(mask, margin=6):
+    """Tight crop around the object. Uncropped frames waste most of the page."""
+    rows, cols = np.where(mask)
+    r0, r1 = max(rows.min() - margin, 0), min(rows.max() + margin + 1, mask.shape[0])
+    c0, c1 = max(cols.min() - margin, 0), min(cols.max() + margin + 1, mask.shape[1])
+    return slice(r0, r1), slice(c0, c1)
+
+
+def _plot_qualitative(path, names=SHOWCASE):
+    """
+    Real objects, shown rather than only tabulated.
+
+    The exponent map is the point of this figure. Section 4.6 argues the
+    departure from Lambertian varies across a surface, and a per object median
+    cannot show that; the map can.
+
+    The displayed input is the brightest of the 96 rather than the first, which
+    is often a grazing light, and it is percentile stretched. Both are display
+    choices only; nothing here feeds a number.
+    """
+    fig, axes = plt.subplots(len(names), 4, figsize=(6.6, 1.55 * len(names)))
+    err_im = c_im = None
+
+    for row, name in enumerate(names):
+        obj = load_object(name)
+        est, _ = woodham_lstsq(obj.images, obj.lights, obj.mask)
+        err = angular_error_deg(est, obj.normals_gt, obj.mask)
+        c_map = np.where(obj.mask, fit_exponent_map(obj.images, obj.normals_gt, obj.lights), np.nan)
+
+        rs, cs = _bbox(obj.mask)
+        mask_c = obj.mask[rs, cs]
+
+        brightest = int(np.argmax(obj.images[obj.mask].sum(axis=0)))
+        shown = obj.images[rs, cs, brightest]
+        hi = np.percentile(shown[mask_c], 99.5)
+        axes[row, 0].imshow(np.clip(shown / max(hi, 1e-12), 0, 1), cmap="gray")
+
+        rgb = np.ones(est[rs, cs].shape)
+        rgb[mask_c] = (est[rs, cs][mask_c] + 1.0) / 2.0
+        axes[row, 1].imshow(np.clip(rgb, 0, 1))
+
+        err_im = axes[row, 2].imshow(np.where(mask_c, err[rs, cs], np.nan),
+                                     cmap="viridis", vmin=0, vmax=40)
+        c_im = axes[row, 3].imshow(c_map[rs, cs], cmap="coolwarm", vmin=0.8, vmax=2.0)
+        axes[row, 0].set_ylabel(name, fontsize=8)
+
+    for ax in axes.ravel():
+        ax.set_xticks([])
+        ax.set_yticks([])
+    for col, title in enumerate(["brightest of 96 inputs", "recovered $\\hat{n}$",
+                                 "angular error (deg)", "$c_{\\mathrm{eff}}$"]):
+        axes[0, col].set_title(title, fontsize=8)
+
+    fig.tight_layout(pad=0.3)
+    fig.subplots_adjust(right=0.88)
+    cax_e = fig.add_axes([0.90, 0.55, 0.012, 0.33])
+    cax_c = fig.add_axes([0.90, 0.12, 0.012, 0.33])
+    fig.colorbar(err_im, cax=cax_e).ax.tick_params(labelsize=6)
+    fig.colorbar(c_im, cax=cax_c).ax.tick_params(labelsize=6)
+    fig.savefig(path, dpi=400, bbox_inches="tight")
+    plt.close(fig)
+
+
 def _plot(rows, path):
     fig, ax = plt.subplots(figsize=(3.25, 2.5))
+    # Labels are nudged individually because several objects cluster tightly
+    # near the origin and default placement overlaps them illegibly.
+    offsets = {"bear": (4, -7), "pot1": (4, 3), "cat": (4, -8), "ball": (5, -2),
+               "buddha": (-4, 5), "pot2": (4, -7), "reading": (4, 3),
+               "goblet": (4, -7), "cow": (5, 0), "harvest": (5, 0)}
     for name, r in rows.items():
         diffuse = name in DIFFUSE
         ax.scatter(r["mae_rig_matched_synthetic_deg"], r["mae_base_deg"], s=16,
                    color="tab:blue" if diffuse else "tab:red",
                    marker="o" if diffuse else "s", zorder=3)
         ax.annotate(name, (r["mae_rig_matched_synthetic_deg"], r["mae_base_deg"]),
-                    xytext=(3, 2), textcoords="offset points", fontsize=6)
+                    xytext=offsets.get(name, (4, 3)), textcoords="offset points",
+                    fontsize=6)
     lim = max(max(r["mae_base_deg"] for r in rows.values()),
               max(r["mae_rig_matched_synthetic_deg"] for r in rows.values())) * 1.1
     ax.plot([0, lim], [0, lim], color="0.7", lw=0.8, zorder=1)
@@ -153,6 +225,7 @@ def run():
     }
     path = figure_path("fig5_bridge.png")
     _plot(rows, path)
+    _plot_qualitative(figure_path("fig6_real_objects.png"))
     save_section("exponent", payload)
 
     print(f"{'average':<9}{'':>7}{payload['avg_base_deg']:>8.2f}{'':>9}"
