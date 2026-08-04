@@ -182,8 +182,10 @@ def albedo_bias(path, resolution=256, m=N_LIGHTS, slant=SLANT_DEG):
         slopes[f"c{c}"] = slope
 
         sub = slice(None, None, 37)
+        # A slope of exactly zero prints as a signed "-0.00" otherwise.
+        shown = f"{slope:+.2f}" if abs(slope) > 5e-3 else "0.00"
         ax.plot(nz[sub], rho[lit][sub], ".", ms=1.5, color=color, alpha=0.5,
-                label=f"$c = {c:.1f}$ (slope {slope:+.2f})")
+                label=f"$c = {c:.1f}$ (slope {shown})")
 
     ax.set_xscale("log")
     ax.set_yscale("log")
