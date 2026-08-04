@@ -147,9 +147,13 @@ def macros(results):
         "diligentWorstObject": worst,
         "officialAgree": f"{d['max_agreement_with_official_deg']:.4f}",
         "degeneratePixels": str(d["total_degenerate_gt_pixels"]),
-        # Swing between scoring undefined pixels as perfect and as worst case,
-        # which is the full width of the convention ambiguity they create.
+        # Two distinct quantities that are easy to conflate. The convention
+        # swing is the full width between scoring undefined pixels as perfect
+        # and as worst case, over the same denominator. The visible gap is what
+        # Table 1 actually shows, since excluding them also changes the
+        # denominator, and it equals diligentMaxDelta.
         "degenerateSwing": f"{d['total_degenerate_gt_pixels'] * 90.0 / (per[worst]['n_pixels'] + d['total_degenerate_gt_pixels']):.3f}",
+        "degenerateGap": f"{abs(per[worst]['delta_deg']):.3f}",
     }
     a = results.get("ablations", {})
     if a:
