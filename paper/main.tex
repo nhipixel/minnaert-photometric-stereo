@@ -142,22 +142,6 @@ degenerate special case of the parametric fitting line above
 value here is diagnostic, an oracle bound on what the one parameter family can
 explain, not a claim of novelty.
 
-\begin{table*}
-  \centering
-  \footnotesize
-  \setlength{\tabcolsep}{4.5pt}
-  \IfFileExists{tables/table2_landscape.tex}%
-    {\input{tables/table2_landscape}}{\input{table2_landscape}}
-  \caption{Reproduced evaluation of the estimate maps distributed with the
-  benchmark \cite{shi2016}, scored with the metric of
-  Section~\ref{sec:metric}: mean angular error in degrees, degenerate ground
-  truth pixels excluded. These are published results rescored for
-  comparability, not results of this paper. The pot2 column sits slightly
-  below originally published values for every method because of the exclusion
-  discussed in Section~\ref{sec:baseline}.}
-  \label{tab:landscape}
-\end{table*}
-
 \section{Method: image formation and the linear solver}
 
 \subsection{Lambertian image formation}
@@ -374,12 +358,12 @@ contains \degeneratePixels{} pixels of exactly zero length inside the mask, so
 the true orientation there is undefined. A metric that evaluates $\arccos$ of
 the dot product scores those pixels at 90 degrees, while a magnitude invariant
 formulation silently scores them at zero, that is, as perfect matches for any
-estimate whatsoever. The two conventions differ by \degenerateSwing{} degrees
-on this object, the entire visible gap in Table~\ref{tab:diligent}: scoring
-the excluded pixels at 90 degrees and averaging over the full mask reproduces
-the tabulated $14.65$ exactly. We exclude the \degeneratePixels{} pixels and
-report the count, rather than letting undefined pixels enter the mean under
-either convention.
+estimate whatsoever. Those two conventions differ by \degenerateSwing{}
+degrees on this object. We adopt neither, excluding the pixels and reporting
+the count, which leaves the \degenerateGap{} degree gap visible in
+Table~\ref{tab:diligent}. That the accounting is exact can be checked in one
+line: scoring the excluded pixels at 90 degrees and averaging over the full
+mask reproduces the tabulated $14.65$ to four decimal places.
 
 \begin{figure}
   \centering
@@ -480,6 +464,36 @@ and below the crossover that accident is worth more than the bad rows cost.
 Robustness machinery tuned for outliers does not automatically transfer to
 model mismatch.
 
+\begin{table*}
+  \centering
+  \footnotesize
+  \setlength{\tabcolsep}{4.5pt}
+  \IfFileExists{tables/table2_landscape.tex}%
+    {\input{tables/table2_landscape}}{\input{table2_landscape}}
+  \caption{Reproduced evaluation of the estimate maps distributed with the
+  benchmark \cite{shi2016}, scored with the metric of
+  Section~\ref{sec:metric}: mean angular error in degrees, degenerate ground
+  truth pixels excluded. These are published results rescored for
+  comparability, not results of this paper. The pot2 column sits slightly
+  below originally published values for every method because of the exclusion
+  discussed in Section~\ref{sec:baseline}.}
+  \label{tab:landscape}
+\end{table*}
+
+\begin{figure*}
+  \centering
+  \includegraphics[width=0.94\textwidth]{fig6_real_objects.png}
+  \caption{Three benchmark objects, spanning the reflectance range. The
+  rightmost column is the per pixel effective exponent, and it is what a per
+  object median cannot show. On the near diffuse ball it is nearly uniform and
+  close to one. On the cat it spikes exactly on the glossy painted patches. On
+  harvest the cloth saturates the scale while the two figures stay low. In
+  every case the exponent map predicts the error map beside it, which is the
+  spatial structure that Section~\ref{sec:exponent} argues a single global
+  exponent cannot capture.}
+  \label{fig:real}
+\end{figure*}
+
 \subsection{Real materials and the effective exponent}
 \label{sec:exponent}
 
@@ -528,8 +542,12 @@ under that object's own light rig, so that the comparison is not confounded by
 rig dependence. It does not: every object sits above the diagonal, by a factor
 of \bridgeRatioMin{} for the most diffuse objects up to \bridgeRatioMax{} for
 the most specular. A single global exponent is the wrong model for real
-materials, whose departure from Lambertian is concentrated in highlights and
-varies across the surface.
+materials, and Figure~\ref{fig:real} shows why directly. The exponent is not a
+property of an object but a field across it: nearly uniform on the near
+diffuse ball, spiking on the cat's glossy patches, and saturating across
+harvest's cloth while its figures stay low. In each case the exponent map and
+the error map beside it share the same spatial structure, which is exactly the
+information a per object median discards.
 
 The per pixel version of the same idea is where the signal lives.
 Equation~\eqref{eq:powerlaw} implies its own correction: raising each
