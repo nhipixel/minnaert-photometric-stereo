@@ -35,6 +35,29 @@ def sphere_normals(resolution=256, radius_max=0.98):
     return normals, mask
 
 
+def perspective_view_field(resolution=256, radius_max=0.98, camera_distance=4.0):
+    """
+    Unit vector from each sphere point toward a finite camera on the z axis.
+
+    Under orthographic viewing every pixel shares the view direction z, so
+    cos(theta_r) equals n_z everywhere. With a finite camera the view direction
+    varies across the image, which is the general case the reduction is claimed
+    to cover: what it needs is that the viewpoint is fixed across the light
+    stack, not that projection is orthographic.
+    """
+    lin = np.linspace(-1.0, 1.0, resolution)
+    x, y = np.meshgrid(lin, lin)
+    r2 = x * x + y * y
+    mask = r2 <= radius_max * radius_max
+
+    z = np.zeros_like(x)
+    z[mask] = np.sqrt(1.0 - r2[mask])
+
+    view = np.stack([-x, -y, camera_distance - z], axis=-1)
+    view /= np.linalg.norm(view, axis=-1, keepdims=True)
+    return view
+
+
 def bump_normals(resolution=256, n_bumps=7, amplitude=0.09, sigma=0.16, seed=0):
     """
     Smooth height field of summed Gaussians, viewed orthographically.
