@@ -264,6 +264,18 @@ $\hat{n}\cdot\hat{s}_j \leq 0$ the observation clamps to zero rather than
 following the power law, which is why shadow handling appears as a separate
 ablation in Section~\ref{sec:ablations}.
 
+It is worth being precise about what the derivation actually assumes, because
+it is weaker than it first appears. Nothing above requires orthographic
+projection. All that is needed is a viewpoint that does not move across the
+light stack, so that $\nu$ carries no light index whatever its value at each
+pixel. A finite camera therefore changes $\nu$ from a constant into a field
+but leaves Equation~\eqref{eq:powerlaw} intact. We verify this directly:
+rendering the same sphere with a per pixel view field toward a camera at finite
+distance alters individual radiances by up to \perspRadianceChange{} percent,
+and changes the recovered normals by \perspDisagree{} degrees, which is machine
+precision. The orthographic capture of the benchmark is convenient, not
+load bearing.
+
 \begin{figure*}
   \centering
   \includegraphics[width=0.92\textwidth]{fig1_teaser.png}
@@ -574,6 +586,33 @@ demonstrably present in the data, but the obvious estimator of it destroys
 it, and a model free robust baseline captures a substantial fraction of the
 available gain for far less machinery.
 
+\subsection{When is a Lambertian solver good enough?}
+
+The measurements support a short practical answer, which we state with its
+conditions attached. Under a well spread rig the reflectance floor alone is
+about \maeHapke{} degrees at the simplified Hapke point and grows monotonically
+as the exponent departs further from one, so for any application whose
+tolerance is a few degrees, reflectance rather than noise or light count is the
+binding constraint, and no amount of extra images will fix it: light count buys
+only the $1/\sqrt{m}$ averaging rate against noise, and that curve is already
+flat past a few tens of lights.
+
+Three cheap checks tell a practitioner which regime they are in, and all three
+are computable from data they already have. Conditioning is the first, and it
+is free: if $\mathrm{cond}(L)$ exceeds a few tens, the rig is the problem
+before reflectance is, and Figure~\ref{fig:ablations} shows the error climbing
+to \condErrMax{} degrees at the extreme. Second, an exponent fit against
+provisional normals will not give a usable correction, as
+Section~\ref{sec:exponent} shows, but its \emph{spatial variance} is still
+diagnostic: a nearly uniform map, as on the ball in
+Figure~\ref{fig:real}, indicates a material the linear model handles, while
+strong spatial structure indicates one it does not. Third, trimmed least
+squares costs one line and recovers \trimAvg{} degrees on average against
+\diligentAvg{} for the plain solve, so a practitioner facing glossy material
+should reach for it before anything more elaborate. What none of these
+recovers is the gap to \oraclePixAvg{} degrees, which needs the exponent field
+itself.
+
 \section{Discussion and limitations}
 
 The synthetic finding is compact: under a fixed viewpoint, one scalar
@@ -600,6 +639,22 @@ normals it was fitted against. Regularized or trim seeded estimation is the
 natural next step, and DiLiGenT102 \cite{ren2022}, with its factorial design
 over shapes and materials, would separate the material effect from the
 geometry effect that our tilt statistics only begin to control.
+
+Reproducibility deserves a note, because several results depend on it. Every
+number in this paper is emitted by the experiment code into a single machine
+readable record and typeset from that record, so nothing is transcribed by hand
+and a rerun cannot leave a stale value in the prose. One command regenerates
+every figure, table and number from scratch. Each claim the text makes is
+additionally encoded as an executable assertion with a stated expectation,
+\numTests{} in total, covering the exact recovery at $c = 1$, the closed form
+collapse at $c = 0$, the invariance and albedo predictions of
+Equation~\eqref{eq:split}, the fitted ablation exponents, the crossover in
+shadow handling, exponent recovery on synthetic data, and every cell of
+Table~\ref{tab:landscape}. This is what made the two protocol findings of
+Section~\ref{sec:baseline} visible at all: both surfaced as disagreements
+against the reference maps at a tolerance no summary statistic would have
+exposed, and the degenerate pixel count is now an assertion rather than an
+observation.
 
 Limitations. Everything here assumes a fixed viewpoint, distant calibrated
 lights, and attached shadows only; interreflections and cast shadows are
