@@ -53,12 +53,12 @@ analytically fixed endpoints, and evaluate the same solver on the DiLiGenT
 benchmark, reproducing the reference baseline to within \diligentAgreeDelta{}
 degrees on \diligentAgreeCount{} of \diligentObjects{} objects. At the
 simplified Hapke point the error reaches \rigMin{} to \rigMax{} degrees across
-the light configurations we test, the range spanned by the mid tier objects of
-that benchmark. On the real objects every fitted effective exponent sits above
+the light configurations we test, comparable to the mid tier objects of that
+benchmark. On the real objects every median effective exponent sits above
 one, a single global exponent underexplains the measured error, and an oracle
 per pixel exponent bounds what estimating the reduction could deliver at
-\oraclePixAvg{} degrees, below each of the eight published classical methods
-rescored in this paper.
+\oraclePixAvg{} degrees on average, below the best of the eight published
+classical methods we rescore here.
 \end{abstract}
 
 \section{Introduction: shape from varying illumination}
@@ -100,9 +100,9 @@ per object, and identify \degeneratePixels{} degenerate ground truth pixels in
 one object that move its reported figure by \degenerateSwing{} degrees
 depending on how they are scored. Fourth, we measure an effective exponent for
 every real object, show that a single exponent underexplains the measured
-error while an oracle per pixel exponent would outperform the eight published
-classical methods whose estimates ship with the benchmark, and show that the
-obvious way to estimate that exponent without ground truth fails.
+error while an oracle per pixel exponent outperforms on average the eight
+published classical methods whose estimates ship with the benchmark, and show
+that the obvious way to estimate that exponent without ground truth fails.
 
 \section{Related work: non Lambertian photometric stereo}
 
@@ -269,12 +269,11 @@ it is weaker than it first appears. Nothing above requires orthographic
 projection. All that is needed is a viewpoint that does not move across the
 light stack, so that $\nu$ carries no light index whatever its value at each
 pixel. A finite camera therefore changes $\nu$ from a constant into a field
-but leaves Equation~\eqref{eq:powerlaw} intact. We verify this directly:
-rendering the same sphere with a per pixel view field toward a camera at finite
-distance alters individual radiances by up to \perspRadianceChange{} percent,
-and changes the recovered normals by \perspDisagree{} degrees, which is machine
-precision. The orthographic capture of the benchmark is convenient, not
-load bearing.
+but leaves Equation~\eqref{eq:powerlaw} intact. Substituting such a field into
+the renderer confirms the algebra numerically: individual radiances move by up
+to \perspRadianceChange{} percent while the recovered normals move by
+\perspDisagree{} degrees, which is machine precision. The orthographic capture
+of the benchmark is convenient, not load bearing.
 
 \begin{figure*}
   \centering
@@ -359,11 +358,12 @@ handling conventions pixel by pixel rather than only in summary.
 Two details of the protocol are worth recording because they change the
 reported figures. The reference pipeline converts colour to grey with a routine
 that clamps its output to the unit interval. Without that clamp, saturated
-pixels inside specular highlights disagree by up to 16 degrees and the ball
-error reads $4.17$ rather than \diligentBall{}. The clamp affects only 0.02
-percent of observations, but those observations concentrate in highlights and
-lower the reported error, so it acts as a mild outlier suppressor inside what
-is presented as an unmodified Lambertian baseline.
+pixels inside specular highlights disagree by up to \clipMaxDisagree{} degrees
+and the ball error reads \clipMaeWithout{} rather than \diligentBall{}. The
+clamp affects only \clipFraction{} percent of observations, but those
+observations concentrate in highlights and lower the reported error, so it acts
+as a mild outlier suppressor inside what is presented as an unmodified
+Lambertian baseline.
 
 The second detail concerns \diligentWorstObject{}. Its ground truth normal map
 contains \degeneratePixels{} pixels of exactly zero length inside the mask, so
@@ -517,10 +517,14 @@ $c_{\mathrm{eff}}$: a measurement of how far each material departs from
 Lambertian, in the only parameter the model has. On synthetic Minnaert data
 the fit recovers the true exponent to $10^{-8}$. On the real objects it
 produces the medians in Table~\ref{tab:exponent}, and they are the first
-surprise: every object fits $c_{\mathrm{eff}} > 1$, from \ceffLow{} to
+surprise: every object has a median $c_{\mathrm{eff}} > 1$, from \ceffLow{} to
 \ceffHigh{}, outside the Minnaert domain entirely. Real glossy materials
 brighten faster than the cosine, they are super Lambertian, where the Minnaert
-family with $c < 1$ describes the opposite, lunar like flattening.
+family with $c < 1$ describes the opposite, lunar like flattening. The claim is
+about medians rather than every pixel: on \ceffQuartileBelow{} of the
+\diligentObjects{} objects the lower quartile still falls below one, and on the
+most specular object the upper quartile sits at the limit of the range the fit
+is permitted to report, so its median understates the departure.
 
 \begin{table}
   \centering
@@ -586,33 +590,6 @@ demonstrably present in the data, but the obvious estimator of it destroys
 it, and a model free robust baseline captures a substantial fraction of the
 available gain for far less machinery.
 
-\subsection{When is a Lambertian solver good enough?}
-
-The measurements support a short practical answer, which we state with its
-conditions attached. Under a well spread rig the reflectance floor alone is
-about \maeHapke{} degrees at the simplified Hapke point and grows monotonically
-as the exponent departs further from one, so for any application whose
-tolerance is a few degrees, reflectance rather than noise or light count is the
-binding constraint, and no amount of extra images will fix it: light count buys
-only the $1/\sqrt{m}$ averaging rate against noise, and that curve is already
-flat past a few tens of lights.
-
-Three cheap checks tell a practitioner which regime they are in, and all three
-are computable from data they already have. Conditioning is the first, and it
-is free: if $\mathrm{cond}(L)$ exceeds a few tens, the rig is the problem
-before reflectance is, and Figure~\ref{fig:ablations} shows the error climbing
-to \condErrMax{} degrees at the extreme. Second, an exponent fit against
-provisional normals will not give a usable correction, as
-Section~\ref{sec:exponent} shows, but its \emph{spatial variance} is still
-diagnostic: a nearly uniform map, as on the ball in
-Figure~\ref{fig:real}, indicates a material the linear model handles, while
-strong spatial structure indicates one it does not. Third, trimmed least
-squares costs one line and recovers \trimAvg{} degrees on average against
-\diligentAvg{} for the plain solve, so a practitioner facing glossy material
-should reach for it before anything more elaborate. What none of these
-recovers is the gap to \oraclePixAvg{} degrees, which needs the exponent field
-itself.
-
 \section{Discussion and limitations}
 
 The synthetic finding is compact: under a fixed viewpoint, one scalar
@@ -640,10 +617,19 @@ natural next step, and DiLiGenT102 \cite{ren2022}, with its factorial design
 over shapes and materials, would separate the material effect from the
 geometry effect that our tilt statistics only begin to control.
 
+For a practitioner the measurements suggest a short triage, in increasing
+order of effort. Check conditioning first, since it is free and an ill
+conditioned rig dominates reflectance entirely. Then fit the exponent map: it
+will not yield a usable correction, but its spatial variation is diagnostic on
+its own, uniform for a material the linear model suits and structured for one
+it does not. If it is structured, trimmed least squares costs one line and
+recovers \trimAvg{} degrees against \diligentAvg{} for the plain solve, and
+the remainder of the gap to \oraclePixAvg{} needs the exponent field itself.
+
 Reproducibility deserves a note, because several results depend on it. Every
-number in this paper is emitted by the experiment code into a single machine
-readable record and typeset from that record, so nothing is transcribed by hand
-and a rerun cannot leave a stale value in the prose. One command regenerates
+quantitative result in this paper is emitted by the experiment code into a
+single machine readable record and typeset from that record, so a rerun cannot
+leave a stale figure in the tables or the prose. One command regenerates
 every figure, table and number from scratch. Each claim the text makes is
 additionally encoded as an executable assertion with a stated expectation,
 \numTests{} in total, covering the exact recovery at $c = 1$, the closed form
