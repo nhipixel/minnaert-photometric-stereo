@@ -18,6 +18,9 @@ import numpy as np
 
 EPS = 1e-6
 
+# Range the per pixel fit is allowed to report. See fit_exponent_map.
+C_MIN, C_MAX = 0.05, 3.0
+
 
 def fit_exponent_map(images, normals, lights, min_cos=0.1, min_obs=4):
     """
@@ -55,9 +58,11 @@ def fit_exponent_map(images, normals, lights, min_cos=0.1, min_obs=4):
         c = (n * sxy - sx * sy) / (n * sxx - sx * sx)
     c = np.nan_to_num(c, nan=1.0, posinf=1.0, neginf=1.0)
     c[n < min_obs] = 1.0
-    # The wide clip keeps pathological pixels finite without hiding fits that
-    # land outside the Minnaert domain, which are reported, not clamped to 1.
-    return np.clip(c, 0.05, 3.0)
+    # The clip keeps pathological pixels finite without hiding fits outside the
+    # Minnaert domain, which are reported rather than clamped to 1. It is not
+    # inert: on the most specular object the upper quartile sits at the cap, so
+    # any statistic above the median there is censored and the report says so.
+    return np.clip(c, C_MIN, C_MAX)
 
 
 def apply_exponent_correction(images, c):
