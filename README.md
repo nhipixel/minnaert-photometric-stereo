@@ -34,7 +34,6 @@ shadowing and porosity and is not.
 | `tests/` | Every quality gate, encoded as assertions |
 | `results/` | Generated figures and `results.json` |
 | `paper/` | CVPR format report, with generated tables and figure copies |
-| `presentation/` | Timed script and live demo for the presentation |
 
 ## Running
 
