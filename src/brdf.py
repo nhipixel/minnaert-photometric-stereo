@@ -22,6 +22,17 @@ import numpy as np
 from lights import view_direction
 
 
+def _cos_view(normals, view):
+    """
+    Cosine of the viewing angle, for a single view direction or a per pixel
+    field. The per pixel form is what a finite camera produces.
+    """
+    view = np.asarray(view, dtype=float)
+    if view.ndim == 1:
+        return np.clip(normals @ view, 0.0, None)
+    return np.clip(np.sum(normals * view, axis=-1), 0.0, None)
+
+
 def _cos_incident(normals, lights):
     """
     Cosine of the incident angle for every pixel and every light.
@@ -52,7 +63,7 @@ def render_minnaert(normals, lights, c, k=1.0, E0=1.0, view=None):
         view = view_direction()
 
     cos_i = _cos_incident(normals, lights)
-    cos_r = np.clip(normals @ view, 0.0, None)[..., None]
+    cos_r = _cos_view(normals, view)[..., None]
     lit = _shadow_mask(normals, lights)
 
     out = np.zeros_like(cos_i)
@@ -65,18 +76,21 @@ def render_minnaert(normals, lights, c, k=1.0, E0=1.0, view=None):
 
 def render_minnaert_powerlaw(normals, lights, c, k=1.0, E0=1.0, view=None):
     """
-    Same radiance written using the reduction. Under orthographic viewing
-    cos_r equals n_z and does not depend on the light index, so the whole
-    view dependent factor collapses into a per pixel constant A and the
-    image stack becomes a power law on Lambertian shading:
+    Same radiance written using the reduction. What the reduction needs is a
+    viewpoint fixed across the light stack, not orthographic projection: cos_r
+    then carries no light index whatever its per pixel value, so the whole view
+    dependent factor collapses into a per pixel constant A and the stack
+    becomes a power law on Lambertian shading:
 
-        I_j = A (n dot s_j)^c,   A = ((c+1)/2pi) k E0 n_z^(c-1)
+        I_j = A (n dot s_j)^c,   A = ((c+1)/2pi) k E0 cos_r^(c-1)
+
+    Under orthographic viewing cos_r is simply n_z.
     """
     if view is None:
         view = view_direction()
 
     cos_i = _cos_incident(normals, lights)
-    cos_r = np.clip(normals @ view, 0.0, None)
+    cos_r = _cos_view(normals, view)
     lit = _shadow_mask(normals, lights)
 
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -89,7 +103,7 @@ def minnaert_A(normals, c, k=1.0, E0=1.0, view=None):
     """The per pixel constant A. Exposed so the albedo bias can be checked."""
     if view is None:
         view = view_direction()
-    cos_r = np.clip(normals @ view, 0.0, None)
+    cos_r = _cos_view(normals, view)
     with np.errstate(divide="ignore", invalid="ignore"):
         A = (c + 1.0) / (2.0 * np.pi) * k * E0 * np.power(cos_r, c - 1.0)
     return np.nan_to_num(A, nan=0.0, posinf=0.0, neginf=0.0)
@@ -111,7 +125,7 @@ def render_simplified_hapke(normals, lights, L0=1.0, view=None):
         view = view_direction()
 
     cos_i = _cos_incident(normals, lights)
-    cos_r = np.clip(normals @ view, 0.0, None)[..., None]
+    cos_r = _cos_view(normals, view)[..., None]
     lit = _shadow_mask(normals, lights)
 
     with np.errstate(divide="ignore", invalid="ignore"):
