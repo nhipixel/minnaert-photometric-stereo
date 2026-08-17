@@ -6,6 +6,7 @@ construction there. The real half asserts the study's load bearing findings:
 the oracle bound helps everywhere, the fitted exponents sit above the Minnaert
 domain, and the naive alternation does not work.
 """
+import gc
 import os
 import sys
 
@@ -70,20 +71,15 @@ def test_trimmed_solver_is_exact_on_clean_lambertian_data(sphere):
 needs_data = pytest.mark.skipif(not is_available(), reason="DiLiGenT not downloaded")
 
 
-@pytest.fixture(scope="module")
-def real_pair():
-    return {name: load_object(name) for name in ("ball", "harvest")}
-
-
 @needs_data
 @pytest.mark.parametrize("name", ["ball", "harvest"])
-def test_real_exponents_sit_above_the_minnaert_domain(real_pair, name):
+def test_real_exponents_sit_above_the_minnaert_domain(name):
     """
     The fitted exponent exceeds one on real objects, glossy materials brighten
     faster than the cosine. This is a finding the report states, so it is
     pinned here rather than left as prose.
     """
-    obj = real_pair[name]
+    obj = load_object(name)
     c_map = fit_exponent_map(obj.images, obj.normals_gt, obj.lights)
     assert float(np.median(c_map[obj.mask])) > 1.0
 
@@ -108,17 +104,23 @@ def test_oracle_correction_beats_the_baseline_on_every_object():
         corrected = mean_angular_error(est, obj.normals_gt, obj.mask)
         assert corrected < base, (name, corrected, base)
         improvements.append(base - corrected)
+
+        # Each stack is a few hundred megabytes, so the reference has to be
+        # dropped before the next object is loaded rather than at loop exit.
+        del obj, base_est, est, c_map
+        gc.collect()
+
     assert float(np.mean(improvements)) > 3.0
 
 
 @needs_data
-def test_naive_alternation_hurts_where_the_oracle_helps(real_pair):
+def test_naive_alternation_hurts_where_the_oracle_helps():
     """
     Fitting the exponent against the current estimate reinforces that
     estimate's own bias. The divergence is the study's negative result and is
     asserted so it cannot be quietly dropped.
     """
-    obj = real_pair["ball"]
+    obj = load_object("ball")
     base_est, _ = woodham_lstsq(obj.images, obj.lights, obj.mask)
     base = mean_angular_error(base_est, obj.normals_gt, obj.mask)
 
