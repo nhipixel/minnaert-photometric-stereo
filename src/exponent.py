@@ -28,16 +28,29 @@ def fit_exponent_map(images, normals, lights, min_cos=0.1, min_obs=4):
     do not follow the power law. Pixels with fewer than min_obs usable
     observations keep c = 1, the Lambertian default.
     """
-    cos_i = normals @ lights.T
-    ok = (cos_i > min_cos) & (images > EPS)
+    # Accumulated one light at a time. Forming the full (H, W, m) log arrays
+    # would allocate hundreds of megabytes of temporaries per object for no
+    # benefit, since only these five sums are needed.
+    shape = images.shape[:2]
+    n = np.zeros(shape, dtype=np.int32)
+    sx = np.zeros(shape)
+    sy = np.zeros(shape)
+    sxx = np.zeros(shape)
+    sxy = np.zeros(shape)
 
-    x = np.where(ok, np.log(np.clip(cos_i, EPS, None)), 0.0)
-    y = np.where(ok, np.log(np.clip(images, EPS, None)), 0.0)
-    n = ok.sum(axis=-1)
+    for j in range(lights.shape[0]):
+        cos_j = normals @ lights[j]
+        ok = (cos_j > min_cos) & (images[..., j] > EPS)
+        if not ok.any():
+            continue
+        x = np.where(ok, np.log(np.clip(cos_j, EPS, None)), 0.0)
+        y = np.where(ok, np.log(np.clip(images[..., j], EPS, None)), 0.0)
+        n += ok
+        sx += x
+        sy += y
+        sxx += x * x
+        sxy += x * y
 
-    sx, sy = x.sum(-1), y.sum(-1)
-    sxx = (x * x).sum(-1)
-    sxy = (x * y).sum(-1)
     with np.errstate(divide="ignore", invalid="ignore"):
         c = (n * sxy - sx * sy) / (n * sxx - sx * sx)
     c = np.nan_to_num(c, nan=1.0, posinf=1.0, neginf=1.0)
