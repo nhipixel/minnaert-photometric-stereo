@@ -16,16 +16,60 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 import numpy as np
 
 from diligent import (
+    BIT_DEPTH_SCALE,
+    LUMA_BT601,
     OBJECTS,
     PUBLISHED_AVERAGE,
     PUBLISHED_BASELINE,
     is_available,
     load_object,
     load_official_l2,
+    default_root,
+    _read_matrix,
+    _read_png,
 )
 from metrics import angular_error_deg, summarize
 from results_io import save_section
 from solver import woodham_lstsq
+
+
+def clip_impact(name="ball"):
+    """
+    What the unit clamp in the grey conversion actually costs.
+
+    The report quotes the size of this effect, so it is measured rather than
+    asserted: the fraction of observations the clamp touches, and how far the
+    estimate moves without it.
+    """
+    obj = load_object(name)
+    folder = os.path.join(default_root(), f"{name}PNG")
+
+    with open(os.path.join(folder, "filenames.txt"), encoding="utf-8") as fh:
+        names = [line.strip() for line in fh if line.strip()]
+    intensities = _read_matrix(os.path.join(folder, "light_intensities.txt"), 3)
+
+    unclipped = np.empty_like(obj.images)
+    n_clipped = 0
+    for j, (fname, intensity) in enumerate(zip(names, intensities)):
+        img = _read_png(os.path.join(folder, fname)) / BIT_DEPTH_SCALE
+        grey = np.maximum(img / intensity, 0.0) @ LUMA_BT601
+        unclipped[..., j] = grey
+        n_clipped += int((grey[obj.mask] > 1.0).sum())
+
+    est_clipped, _ = woodham_lstsq(obj.images, obj.lights, obj.mask)
+    est_raw, _ = woodham_lstsq(unclipped, obj.lights, obj.mask)
+
+    stats = summarize(angular_error_deg(est_clipped, est_raw, obj.mask), obj.mask)
+    total_obs = int(obj.mask.sum()) * obj.images.shape[2]
+    return {
+        "object": name,
+        "clipped_fraction_percent": 100.0 * n_clipped / total_obs,
+        "max_disagreement_deg": stats["max_deg"],
+        "mae_with_clip_deg": summarize(
+            angular_error_deg(est_clipped, obj.normals_gt, obj.mask), obj.mask)["mean_deg"],
+        "mae_without_clip_deg": summarize(
+            angular_error_deg(est_raw, obj.normals_gt, obj.mask), obj.mask)["mean_deg"],
+    }
 
 
 def run():
@@ -77,6 +121,7 @@ def run():
         "total_degenerate_gt_pixels": int(
             sum(r["n_degenerate_gt_pixels"] for r in rows.values())
         ),
+        "clip_impact": clip_impact(),
         "note": (
             "Grey conversion clips at 1 to match the reference implementation. "
             "Without the clip, saturated specular pixels disagree and ball "
