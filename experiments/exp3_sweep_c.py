@@ -28,9 +28,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from brdf import render_minnaert
-from geometry import sphere_normals
+from geometry import perspective_view_field, sphere_normals
 from lights import condition_number, cone_rig
-from metrics import angular_error_deg, summarize
+from metrics import angular_error_deg, mean_angular_error, summarize
 from results_io import figure_path, save_section
 from solver import woodham_lstsq
 from theory import collapse_error_deg, first_order_error_deg, fully_lit_mask
@@ -117,6 +117,40 @@ def _plot(data, path):
     fig.tight_layout(pad=0.3)
     fig.savefig(path, dpi=400, bbox_inches="tight")
     plt.close(fig)
+
+
+def perspective_check(resolution=192, m=N_LIGHTS, slant=SLANT_DEG,
+                      c_values=(0.75, 0.5, 0.25)):
+    """
+    Does the reduction survive a finite camera?
+
+    The derivation needs the viewpoint fixed across the light stack, not
+    orthographic projection. Rendering with a per pixel view field toward a
+    camera at finite distance changes the radiances substantially while leaving
+    the recovered normals untouched, which is the claim stated in the report.
+    """
+    normals, mask = sphere_normals(resolution)
+    lights = cone_rig(m, slant)
+    lit = fully_lit_mask(normals, lights, mask)
+    view = perspective_view_field(resolution)
+
+    rows = []
+    for c in c_values:
+        ortho = render_minnaert(normals, lights, float(c))
+        persp = render_minnaert(normals, lights, float(c), view=view)
+
+        n_o, _ = woodham_lstsq(ortho, lights, mask)
+        n_p, _ = woodham_lstsq(persp, lights, mask)
+
+        scale = np.abs(ortho[lit]).max()
+        rows.append({
+            "c": float(c),
+            "radiance_change": float(np.abs(ortho - persp)[lit].max() / scale),
+            "mae_orthographic_deg": mean_angular_error(n_o, normals, lit),
+            "mae_perspective_deg": mean_angular_error(n_p, normals, lit),
+            "normal_disagreement_deg": mean_angular_error(n_o, n_p, lit),
+        })
+    return rows
 
 
 def make_teaser(path, resolution=256, m=N_LIGHTS, slant=SLANT_DEG):
@@ -240,6 +274,7 @@ def run():
     _plot(data, path)
     make_teaser(figure_path("fig1_teaser.png"))
     payload["albedo_slopes"] = albedo_bias(figure_path("fig3_albedo_bias.png"))
+    payload["perspective_check"] = perspective_check()
     save_section("minnaert_sweep", payload)
 
     print(f"fully lit pixels : {data['n_pixels']}")

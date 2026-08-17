@@ -102,6 +102,21 @@ def test_curve_is_stable_under_resolution_change():
     assert abs(coarse["mean"][0] - fine["mean"][0]) < 0.05
 
 
+def test_reduction_survives_a_finite_camera():
+    """
+    The derivation needs a viewpoint fixed across the light stack, not
+    orthographic projection. A finite camera changes the radiances materially
+    while leaving the recovered normals untouched, and asserting the radiance
+    really did change stops this passing vacuously.
+    """
+    from exp3_sweep_c import perspective_check
+
+    for row in perspective_check(resolution=96):
+        assert row["radiance_change"] > 0.05, row
+        assert row["normal_disagreement_deg"] < 1e-10, row
+        assert abs(row["mae_orthographic_deg"] - row["mae_perspective_deg"]) < 1e-10, row
+
+
 def test_collapse_direction_is_independent_of_the_true_normal():
     """At c = 0 every fully lit pixel returns the same estimate."""
     normals, mask = sphere_normals(RES)
