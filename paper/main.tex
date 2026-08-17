@@ -30,6 +30,16 @@
 \IfFileExists{tables/numbers.tex}{\input{tables/numbers}}{\input{numbers}}
 \graphicspath{{figures/}{./}}
 
+% Unnumbered first page footnote, the conventional place a reader looks for a
+% code release. Kept out of the numbered sequence so it does not read as a note
+% on any particular sentence.
+\newcommand{\blfootnote}[1]{%
+  \begingroup
+  \renewcommand\thefootnote{}\footnote{#1}%
+  \addtocounter{footnote}{-1}%
+  \endgroup
+}
+
 \begin{document}
 
 \title{Quantifying the Breakdown of Lambertian Photometric Stereo\\under Minnaert Reflectance}
@@ -37,6 +47,16 @@
 \author{Nhi Ngo}
 
 \maketitle
+
+% Two deliberate choices here. The address is written out literally, because
+% \url takes a verbatim argument and would print a macro name unexpanded. And
+% the link is \href with a separate display string, so the target is fixed
+% independently of where the printed text wraps. A bare \url that breaks across
+% a line at one of the hyphens can hand the viewer a mangled address.
+\blfootnote{Code, tests, and the scripts that regenerate every figure, table
+and number in this paper:
+\href{https://github.com/nhipixel/minnaert-photometric-stereo}%
+     {\nolinkurl{github.com/nhipixel/minnaert-photometric-stereo}}}
 
 \begin{abstract}
 Photometric stereo recovers a per pixel surface normal from several images of a
@@ -81,12 +101,12 @@ reflects light diffusely, in the Lambertian sense, so that observed brightness
 depends on the incident direction but not on the direction from which the
 surface is viewed.
 
-Real materials violate this. The question this paper asks is not whether the
-assumption fails, which is well known, but by how much and as a function of
-what. We answer it by rendering surfaces whose reflectance is controlled by a
-single continuous parameter, running an unmodified Lambertian solver on all of
-them, and measuring the resulting angular error against ground truth that is
-exact by construction, then carrying the same machinery to real objects.
+Real materials violate this, which is well known. The question this paper asks
+is by how much, and as a function of what. We answer it by rendering surfaces
+whose reflectance is controlled by a single continuous parameter, running an
+unmodified Lambertian solver on all of them, and measuring the resulting
+angular error against ground truth that is exact by construction, then
+carrying the same machinery to real objects.
 
 Our contributions are the following. First, we show that from a fixed viewpoint
 the Minnaert model collapses to a per pixel power law on Lambertian shading,
@@ -140,7 +160,7 @@ power that linearizes the model, is elementary and is best read as the most
 degenerate special case of the parametric fitting line above
 \cite{goldman2005, alldrin2008}: one exponent, no joint optimization. Its
 value here is diagnostic, an oracle bound on what the one parameter family can
-explain, not a claim of novelty.
+explain.
 
 \section{Method: image formation and the linear solver}
 
@@ -235,8 +255,8 @@ least squares solution is $g = A\,L^{+}w$ with $L^{+}$ the pseudoinverse, so
 %
 The positive scalar $A$ cancels in the direction and survives in the length.
 The estimated normal therefore depends only on the exponent and the light
-directions, not on albedo, irradiance, or the orientation of the surface
-relative to the camera, while the estimated albedo absorbs the full
+directions. Albedo, irradiance, and the orientation of the surface relative to
+the camera all leave it unchanged, while the estimated albedo absorbs the full
 $\nu^{\,c-1}$ bias, growing without bound toward the silhouette where
 $\nu \to 0$. Section~\ref{sec:sweep} confirms both halves.
 
@@ -260,8 +280,8 @@ regardless of the true surface. The mean error at $c = 0$ is therefore
 computable in closed form before running anything.
 
 Both predictions hold on pixels seen by every light. Where
-$\hat{n}\cdot\hat{s}_j \leq 0$ the observation clamps to zero rather than
-following the power law, which is why shadow handling appears as a separate
+$\hat{n}\cdot\hat{s}_j \leq 0$ the observation clamps to zero and
+falls outside the power law, which is why shadow handling appears as a separate
 ablation in Section~\ref{sec:ablations}.
 
 It is worth being precise about what the derivation actually assumes, because
@@ -273,7 +293,7 @@ but leaves Equation~\eqref{eq:powerlaw} intact. Substituting such a field into
 the renderer confirms the algebra numerically: individual radiances move by up
 to \perspRadianceChange{} percent while the recovered normals move by
 \perspDisagree{} degrees, which is machine precision. The orthographic capture
-of the benchmark is convenient, not load bearing.
+of the benchmark is a convenience the derivation never asked for.
 
 \begin{figure*}
   \centering
@@ -323,14 +343,14 @@ truth normals over the foreground mask,
   \label{eq:angular-error}
 \end{equation}
 %
-The two argument form is used rather than the arc cosine of the dot product
-because the derivative of $\arccos$ is unbounded at zero angle, which limits
-its usable resolution to roughly $10^{-6}$ degrees. That matters here because
-the synthetic Lambertian case is exact to machine precision and would otherwise
-be reported at the resolution limit of the metric rather than of the solver.
-Pixels whose ground truth normal has zero length are excluded rather than
-scored, since the angle to a vector with no direction is undefined; the
-consequences of this choice are quantified in Section~\ref{sec:baseline}.
+The two argument form is used because the derivative of $\arccos$ is unbounded
+at zero angle, which limits its usable resolution to roughly $10^{-6}$ degrees.
+That matters here because the synthetic Lambertian case is exact to machine
+precision and would otherwise be reported at the resolution limit of the
+metric, which is a property of the measurement alone. Pixels whose ground truth
+normal has zero length are excluded from the score, since the angle to a vector
+with no direction is undefined; the consequences of this choice are quantified
+in Section~\ref{sec:baseline}.
 
 \begin{table}
   \centering
@@ -353,17 +373,18 @@ The average of \diligentAvg{} degrees agrees with the reference baseline, and
 \diligentAgreeDelta{} degrees. Beyond the aggregate, the estimated normal maps
 agree with the reference normal maps distributed with the benchmark to under
 \officialAgree{} degrees per object, which fixes the solver and the data
-handling conventions pixel by pixel rather than only in summary.
+handling conventions pixel by pixel, far below the resolution at which an
+average over a mask can discriminate.
 
 Two details of the protocol are worth recording because they change the
 reported figures. The reference pipeline converts colour to grey with a routine
 that clamps its output to the unit interval. Without that clamp, saturated
 pixels inside specular highlights disagree by up to \clipMaxDisagree{} degrees
-and the ball error reads \clipMaeWithout{} rather than \diligentBall{}. The
-clamp affects only \clipFraction{} percent of observations, but those
-observations concentrate in highlights and lower the reported error, so it acts
-as a mild outlier suppressor inside what is presented as an unmodified
-Lambertian baseline.
+and the ball error reads \clipMaeWithout{}, where the clamped pipeline gives
+\diligentBall{}. The clamp affects only \clipFraction{} percent of
+observations, but those observations concentrate in highlights and lower the
+reported error, so it acts as a mild outlier suppressor inside what is
+presented as an unmodified Lambertian baseline.
 
 The second detail concerns \diligentWorstObject{}. Its ground truth normal map
 contains \degeneratePixels{} pixels of exactly zero length inside the mask, so
@@ -411,7 +432,7 @@ figure must carry its rig. And the first order law has a stated range: it
 tracks the measurement within ten percent for $c \geq 0.9$ and degrades into a
 lower bound beyond, understating the true error by \predRatioHapke$\times$ at
 $c = 0.5$. The prediction is useful where perturbation theory says it should
-be, and visibly labeled where it is not. The curve itself is invariant to the
+be, and visibly labeled where it stops. The curve itself is invariant to the
 albedo pattern and to image scale, as Equation~\eqref{eq:split} requires, and
 repeating the sweep on the height field geometry preserves its shape exactly,
 exact at $c = 1$ and monotone below, while the magnitude drops to
@@ -460,17 +481,17 @@ Figure~\ref{fig:ablations} isolates the other levers. Conditioning behaves as
 the classical analysis says it should: squeezing the light azimuths into a
 narrow wedge drives $\mathrm{cond}(L)$ from \sweepCond{} to \condMax{} and the
 error from about one degree to \condErrMax{}, monotonically and with log log
-correlation \condCorr{}, though sublinearly rather than in proportion, and the
-most degenerate rigs saturate at errors no better than pointing every normal
-at the camera. With well spread lights, error falls with light count at a
-fitted exponent of \lightExponent{}, the $1/\sqrt{m}$ averaging rate, and
-grows linearly in noise, fitted exponent \noiseExponent{}.
+correlation \condCorr{}. The growth is sublinear, and the most degenerate rigs
+saturate at errors no better than pointing every normal at the camera. With
+well spread lights, error falls with light count at a fitted exponent of
+\lightExponent{}, the $1/\sqrt{m}$ averaging rate, and grows linearly in
+noise, fitted exponent \noiseExponent{}.
 
 Shadow handling is the ablation with a twist. Discarding observations below
 the local horizon makes Lambertian recovery exact on the full sphere, removing
 the only error source. On a Minnaert surface the same masking helps only down
 to $c \approx \shadowCrossover{}$ and then hurts, because the reflectance bias
-is systematic rather than an outlier: retaining the clamped observations
+is systematic, and the clamped observations carry usable signal: retaining them
 happens to shrink the estimate in a direction that partially cancels the bias,
 and below the crossover that accident is worth more than the bad rows cost.
 Robustness machinery tuned for outliers does not automatically transfer to
@@ -486,9 +507,9 @@ model mismatch.
   benchmark \cite{shi2016}, scored with the metric of
   Section~\ref{sec:metric}: mean angular error in degrees, degenerate ground
   truth pixels excluded. These are published results rescored for
-  comparability, not results of this paper. The pot2 column sits slightly
-  below originally published values for every method because of the exclusion
-  discussed in Section~\ref{sec:baseline}.}
+  comparability, and the estimates are the original authors'. The pot2 column
+  sits slightly below originally published values for every method because of
+  the exclusion discussed in Section~\ref{sec:baseline}.}
   \label{tab:landscape}
 \end{table*}
 
@@ -519,12 +540,13 @@ the fit recovers the true exponent to $10^{-8}$. On the real objects it
 produces the medians in Table~\ref{tab:exponent}, and they are the first
 surprise: every object has a median $c_{\mathrm{eff}} > 1$, from \ceffLow{} to
 \ceffHigh{}, outside the Minnaert domain entirely. Real glossy materials
-brighten faster than the cosine, they are super Lambertian, where the Minnaert
-family with $c < 1$ describes the opposite, lunar like flattening. The claim is
-about medians rather than every pixel: on \ceffQuartileBelow{} of the
-\diligentObjects{} objects the lower quartile still falls below one, and on the
-most specular object the upper quartile sits at the limit of the range the fit
-is permitted to report, so its median understates the departure.
+brighten faster than the cosine, a super Lambertian behaviour, where the
+Minnaert family with $c < 1$ describes the opposite, a lunar like flattening.
+The claim is about medians, which is the resolution at which it holds: on
+\ceffQuartileBelow{} of the \diligentObjects{} objects the lower quartile
+still falls below one, and on the most specular object the upper quartile sits
+at the limit of the range the fit is permitted to report, so its median
+understates the departure.
 
 \begin{table}
   \centering
@@ -533,9 +555,9 @@ is permitted to report, so its median understates the departure.
   \caption{Effective exponent and the correction study on the real objects,
   mean angular error in degrees. LS is the unmodified baseline. Oracle raises
   each observation to $1/c_{\mathrm{eff}}(x)$ using the per pixel fit, which
-  reads the ground truth and therefore bounds, rather than constitutes, a
-  method. Trimmed drops the darkest and brightest quarter of observations per
-  pixel and uses no reflectance model at all.}
+  reads the ground truth and therefore bounds what such a method could reach.
+  Trimmed drops the darkest and brightest quarter of observations per pixel and
+  uses no reflectance model at all.}
   \label{tab:exponent}
 \end{table}
 
@@ -558,8 +580,8 @@ under that object's own light rig, so that the comparison is not confounded by
 rig dependence. It does not: every object sits above the diagonal, by a factor
 of \bridgeRatioMin{} for the most diffuse objects up to \bridgeRatioMax{} for
 the most specular. A single global exponent is the wrong model for real
-materials, and Figure~\ref{fig:real} shows why directly. The exponent is not a
-property of an object but a field across it: nearly uniform on the near
+materials, and Figure~\ref{fig:real} shows why directly. The exponent is a
+field across an object, varying pixel to pixel: nearly uniform on the near
 diffuse ball, spiking on the cat's glossy patches, and saturating across
 harvest's cloth while its figures stay low. In each case the exponent map and
 the error map beside it share the same spatial structure, which is exactly the
@@ -610,7 +632,7 @@ per pixel exponent would outperform every classical method rescored here. That
 gap between \oraclePixAvg{} and \naiveAvg{} degrees, between the bound and the
 naive estimator of the same quantity, is in our view the most useful number in
 the paper: it locates the open problem precisely in robust exponent
-estimation, not in the correction itself, and the failure mode is
+estimation, leaving the correction itself settled, and the failure mode is
 instructive, a feedback loop in which the exponent inherits the bias of the
 normals it was fitted against. Regularized or trim seeded estimation is the
 natural next step, and DiLiGenT102 \cite{ren2022}, with its factorial design
@@ -619,12 +641,13 @@ geometry effect that our tilt statistics only begin to control.
 
 For a practitioner the measurements suggest a short triage, in increasing
 order of effort. Check conditioning first, since it is free and an ill
-conditioned rig dominates reflectance entirely. Then fit the exponent map: it
-will not yield a usable correction, but its spatial variation is diagnostic on
-its own, uniform for a material the linear model suits and structured for one
-it does not. If it is structured, trimmed least squares costs one line and
-recovers \trimAvg{} degrees against \diligentAvg{} for the plain solve, and
-the remainder of the gap to \oraclePixAvg{} needs the exponent field itself.
+conditioned rig dominates reflectance entirely. Then fit the exponent map. Its
+spatial variation is diagnostic on its own even where the correction it
+implies stays out of reach: uniform for a material the linear model suits,
+structured for one it strains. If it is structured, trimmed least squares
+costs one line and recovers \trimAvg{} degrees against \diligentAvg{} for the
+plain solve, and the remainder of the gap to \oraclePixAvg{} needs the
+exponent field itself.
 
 Reproducibility deserves a note, because several results depend on it. Every
 quantitative result in this paper is emitted by the experiment code into a
@@ -639,8 +662,8 @@ shadow handling, exponent recovery on synthetic data, and every cell of
 Table~\ref{tab:landscape}. This is what made the two protocol findings of
 Section~\ref{sec:baseline} visible at all: both surfaced as disagreements
 against the reference maps at a tolerance no summary statistic would have
-exposed, and the degenerate pixel count is now an assertion rather than an
-observation.
+exposed, and the degenerate pixel count is now an assertion the suite enforces
+on every run.
 
 Limitations. Everything here assumes a fixed viewpoint, distant calibrated
 lights, and attached shadows only; interreflections and cast shadows are
@@ -648,10 +671,11 @@ absent from the synthetic data and unmodeled on the real data. The reflectance
 family is the simplified Hapke and Minnaert line, one exponent, no specular
 lobe, and the first order law is accurate only near $c = 1$, understating the
 error by \predRatioZero$\times$ at the far end of the range. The oracle
-correction is a bound, not a method, and the trim fractions of the robust
-control are conventional rather than tuned. Error magnitudes on any geometry
-depend on the range of orientations it presents, which we control with tilt
-statistics but do not eliminate.
+correction is a bound on what such a method could reach, and the trim
+fractions of the robust control are conventional, chosen before the
+experiments ran. Error magnitudes on any geometry depend on the range of
+orientations it presents, which we control with tilt statistics but do not
+eliminate.
 
 \section{Conclusion}
 

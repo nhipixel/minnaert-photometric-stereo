@@ -8,7 +8,7 @@ Photometric stereo recovers a per pixel surface normal from several images of a 
 under known, varying illumination. The standard solver assumes the surface is Lambertian. Real
 surfaces are not.
 
-This project measures exactly how much that assumption costs. Surfaces are rendered with the
+This project measures how much that assumption costs. Surfaces are rendered with the
 Minnaert reflectance model, whose exponent c interpolates continuously from Lambertian at c equal
 to 1 through the simplified Hapke model at c equal to 0.5, and the Lambertian solver is run on all
 of it. The result is angular error as a function of a single scalar, predicted in closed form and
