@@ -44,6 +44,8 @@ METHOD_LABELS = {
 
 def table1_diligent(results):
     """Per object mean angular error against the reference baseline."""
+    if "diligent_baseline" not in results:
+        return None
     d = results["diligent_baseline"]
     per = d["per_object"]
 
@@ -127,36 +129,45 @@ def macros(results):
     The report writes \\diligentAvg rather than a literal, so a rerun updates
     the sentence as well as the table.
     """
-    d = results["diligent_baseline"]
+    d = results.get("diligent_baseline")
     s = results.get("minnaert_sweep", {})
+    defs = {"numTests": str(count_tests() or "over 90")}
 
-    per = d["per_object"]
-    deltas = {k: abs(v["delta_deg"]) for k, v in per.items()}
-    worst = max(deltas, key=deltas.get)
-    # Agreement excluding the single object whose reference value is itself
-    # disputed. Quoting only the overall maximum understates how closely the
-    # other nine match.
-    rest = sorted(v for k, v in deltas.items() if k != worst)
+    if d:
+        per = d["per_object"]
+        deltas = {k: abs(v["delta_deg"]) for k, v in per.items()}
+        worst = max(deltas, key=deltas.get)
+        # Agreement excluding the single object whose reference value is itself
+        # disputed. Quoting only the overall maximum understates how closely
+        # the other nine match.
+        rest = sorted(v for k, v in deltas.items() if k != worst)
+        clip = d.get("clip_impact", {})
 
-    defs = {
-        "diligentAvg": f"{d['average_mae_deg']:.2f}",
-        "diligentBall": f"{per['ball']['mae_deg']:.2f}",
-        "diligentMaxDelta": f"{d['max_abs_delta_deg']:.3f}",
-        "diligentObjects": str(len(per)),
-        "numTests": str(count_tests() or "over 90"),
-        "diligentAgreeCount": str(len(rest)),
-        "diligentAgreeDelta": f"{rest[-1]:.3f}",
-        "diligentWorstObject": worst,
-        "officialAgree": f"{d['max_agreement_with_official_deg']:.4f}",
-        "degeneratePixels": str(d["total_degenerate_gt_pixels"]),
-        # Two distinct quantities that are easy to conflate. The convention
-        # swing is the full width between scoring undefined pixels as perfect
-        # and as worst case, over the same denominator. The visible gap is what
-        # Table 1 actually shows, since excluding them also changes the
-        # denominator, and it equals diligentMaxDelta.
-        "degenerateSwing": f"{d['total_degenerate_gt_pixels'] * 90.0 / (per[worst]['n_pixels'] + d['total_degenerate_gt_pixels']):.3f}",
-        "degenerateGap": f"{abs(per[worst]['delta_deg']):.3f}",
-    }
+        defs.update({
+            "diligentAvg": f"{d['average_mae_deg']:.2f}",
+            "diligentBall": f"{per['ball']['mae_deg']:.2f}",
+            "diligentMaxDelta": f"{d['max_abs_delta_deg']:.3f}",
+            "diligentObjects": str(len(per)),
+            "diligentAgreeCount": str(len(rest)),
+            "diligentAgreeDelta": f"{rest[-1]:.3f}",
+            "diligentWorstObject": worst,
+            "officialAgree": f"{d['max_agreement_with_official_deg']:.4f}",
+            "degeneratePixels": str(d["total_degenerate_gt_pixels"]),
+            # Two distinct quantities that are easy to conflate. The convention
+            # swing is the full width between scoring undefined pixels as
+            # perfect and as worst case, over the same denominator. The visible
+            # gap is what Table 1 shows, since excluding them also changes the
+            # denominator.
+            "degenerateSwing": f"{d['total_degenerate_gt_pixels'] * 90.0 / (per[worst]['n_pixels'] + d['total_degenerate_gt_pixels']):.3f}",
+            "degenerateGap": f"{abs(per[worst]['delta_deg']):.3f}",
+        })
+        if clip:
+            defs.update({
+                "clipFraction": f"{clip['clipped_fraction_percent']:.2f}",
+                "clipMaxDisagree": f"{clip['max_disagreement_deg']:.0f}",
+                "clipMaeWithout": f"{clip['mae_without_clip_deg']:.2f}",
+            })
+
     a = results.get("ablations", {})
     if a:
         rig = a["rig_dependence"]
@@ -215,7 +226,10 @@ def macros(results):
         ceffs = [r["c_eff_median"] for r in d["per_object"].values()]
         ratios = [r["mae_base_deg"] / r["mae_rig_matched_synthetic_deg"]
                   for r in d["per_object"].values()]
+        iqr_lo = [r["c_eff_iqr"][0] for r in d["per_object"].values()]
+        n_below = sum(1 for v in iqr_lo if v < 1.0)
         defs.update({
+            "ceffQuartileBelow": str(n_below),
             "oraclePixAvg": f"{d['avg_oracle_pixel_deg']:.2f}",
             "oracleObjAvg": f"{d['avg_oracle_object_deg']:.2f}",
             "naiveAvg": f"{d['avg_naive_iterated_deg']:.2f}",
