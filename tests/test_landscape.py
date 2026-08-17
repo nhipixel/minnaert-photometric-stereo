@@ -40,10 +40,32 @@ def table(truth):
     return out
 
 
+# Averages from the literature for the eight rescored methods, used to pin the
+# 80 non baseline cells to something better than a plausibility band. Small
+# deviations are expected since degenerate ground truth pixels are excluded
+# here and were not in the original evaluations.
+PUBLISHED_AVERAGES = {
+    "CVPR12Shi": 10.30, "CVPR14Ikehata": 10.60, "ICCV05Goldman": 10.77,
+    "CVPR10Higo": 12.42, "CVPR08Alldrin": 12.59, "ACCV10Wu": 13.33,
+    "CVPR12Ikehata": 13.66, "ECCV12Shi": 14.57,
+}
+
+
 def test_every_cell_exists_and_is_plausible(table):
     for key, value in table.items():
         assert np.isfinite(value), key
         assert 0.5 < value < 60.0, (key, value)
+
+
+@pytest.mark.parametrize("method", sorted(PUBLISHED_AVERAGES))
+def test_each_rescored_method_lands_on_its_published_average(table, method):
+    """
+    Pins the 80 cells that the baseline row does not cover. Without this the
+    only value level check in the table is the l2 row, and the rest could drift
+    without any test noticing.
+    """
+    avg = float(np.mean([table[(method, n)] for n in OBJECTS]))
+    assert abs(avg - PUBLISHED_AVERAGES[method]) < 0.05, (method, avg)
 
 
 def test_l2_row_matches_the_tabulated_baseline(table):
