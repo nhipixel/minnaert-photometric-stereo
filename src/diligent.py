@@ -155,15 +155,19 @@ def load_object(name, root=None):
 
     lights = lights / np.linalg.norm(lights, axis=1, keepdims=True)
 
-    stack = []
-    for fname, intensity in zip(names, intensities):
+    # Written into a preallocated array rather than stacked from a list. The
+    # list form holds every frame and its copy at once, doubling peak memory
+    # for a stack that is already a few hundred megabytes.
+    first = _read_png(os.path.join(folder, names[0]))
+    images = np.empty(first.shape[:2] + (len(names),), dtype=np.float64)
+    for j, (fname, intensity) in enumerate(zip(names, intensities)):
         img = _read_png(os.path.join(folder, fname)) / BIT_DEPTH_SCALE
         if img.ndim == 3:
             img = np.maximum(img / intensity, 0.0)
-            stack.append(np.minimum(img @ LUMA_BT601, 1.0))
+            images[..., j] = np.minimum(img @ LUMA_BT601, 1.0)
         else:
-            stack.append(np.clip(img / intensity.mean(), 0.0, 1.0))
-    images = np.stack(stack, axis=-1)
+            images[..., j] = np.clip(img / intensity.mean(), 0.0, 1.0)
+    del first
 
     mask = _read_png(os.path.join(folder, "mask.png"))
     if mask.ndim == 3:

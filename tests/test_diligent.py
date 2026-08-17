@@ -9,6 +9,8 @@ produce. A ball error far from the published 4.10 means a convention error in
 the light directions, the intensity normalization, or the normal coordinate
 frame. It does not mean the method is wrong.
 """
+import gc
+
 import numpy as np
 import pytest
 
@@ -31,8 +33,12 @@ pytestmark = pytest.mark.skipif(
 def _mae(name):
     obj = load_object(name)
     est, _ = woodham_lstsq(obj.images, obj.lights, obj.mask)
-    err = angular_error_deg(est, obj.normals_gt, obj.mask)
-    return summarize(err, obj.mask)["mean_deg"]
+    value = summarize(angular_error_deg(est, obj.normals_gt, obj.mask), obj.mask)["mean_deg"]
+    # Stacks are a few hundred megabytes each and this helper runs dozens of
+    # times across the suite, so the reference is dropped before returning.
+    del obj, est
+    gc.collect()
+    return value
 
 
 def test_object_shapes_are_consistent():
