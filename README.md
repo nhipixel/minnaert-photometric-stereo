@@ -2,6 +2,8 @@
 
 Research code for a controlled study of how the Lambertian assumption fails in photometric stereo.
 
+Full report (CVPR format): [PDF](https://drive.google.com/file/d/1vLmsTJqySh8k55kGBnOUqAg9h7AFmYur/view?usp=sharing)
+
 ## Project Overview
 
 Photometric stereo recovers a per pixel surface normal from several images of a static scene taken
